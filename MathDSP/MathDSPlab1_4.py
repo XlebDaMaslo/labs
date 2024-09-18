@@ -18,7 +18,7 @@ plt.ylabel('Амплитуда')
 plt.grid(True)
 plt.show()
 
-f = 0.25  # Основная частота, Гц
+f = 0.25
 N = 5
 t = np.linspace(0, 5, 1000)
 
@@ -26,12 +26,10 @@ x_total = np.zeros_like(t)
 
 plt.figure(figsize=(10, 8))
 
-n=0
-for n in range(N+1):
-    harmonic = (4 / ((2*n - 1) * np.pi)) * np.cos(2 * np.pi * (2*n - 1) * f * t - np.pi / 2)
+for n in range(1, N+1):
+    x = (4 / ((2*n - 1) * np.pi)) * np.cos(2 * np.pi * (2*n - 1) * f * t - np.pi / 2)
     
-    x_total += harmonic
-    n+=1
+    x_total += x
     
     plt.plot(t, x_total, label=f'Слагаемых: {n}')
 
