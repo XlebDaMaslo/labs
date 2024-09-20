@@ -92,11 +92,16 @@ plt.figure(figsize=(12, 8))
 plt.subplot(5, 1, 1)
 plot_spectr(y, Fs, 'Исходный сигнал')
 
+
 for i, num_bits in enumerate(num_bits_list):
     quantized_signal = quantize(y, num_bits)
+    
 
     plt.subplot(5, 1, i+2)
     plot_spectr(quantized_signal, Fs, f'Квантованный сигнал ({num_bits} бит)')
+    print(f'Пример значений после квантования для {num_bits} бит:')
+    for i in range(5800, 5826):
+        print(quantized_signal[i])
     #plt.ylim(0, 1)
     error = np.mean(np.abs(y - quantized_signal))
     print(f"Средняя ошибка квантования для {num_bits} бит: {error}")

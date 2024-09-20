@@ -12,7 +12,7 @@ T = 1/n
 n_points = t_lim * n
 #phi = 8
 
-y = np.sin((12 * np.pi * f * t) + (np.pi / 11)) + np.sin(10 * np.pi * f * t)
+y = np.sin((12 * np.pi * f * t) + (np.pi / 11)) + np.sin(10 * np.pi * f * t) 
 
 plt.subplot(3, 1, 1)
 plt.plot(t, y, label='Исходный сигнал')
@@ -77,6 +77,7 @@ f_max = max_f_dig
 print(f"Ширина спектра: {f_max - f_min} Гц")
 print(f"Объем памяти для хранения массива dig_y: {dig_y.nbytes / 1024:.3f} КБ")
 
+
 #6
 plt.subplot(3, 1, 3)
 plt.plot(dig_t, dig_y, label='Оцифрованный сигнал')
@@ -87,6 +88,39 @@ plt.ylim(-2, 2)
 plt.xlim(0, t_lim)
 plt.grid(True)
 plt.legend()
+plt.tight_layout()
+plt.show()
+
+#nn
+def plot_fft(signal, fs, title, pos):
+    N = len(signal)
+    T = 1 / fs
+    yf = fft(signal)
+    xf = fftfreq(N, T)[:N // 2]
+    A_spectr = 2 / N * np.abs(yf[:N // 2])
+
+    plt.subplot(2, 1, pos)
+    plt.plot(xf, A_spectr)
+    plt.title(title)
+    plt.xlabel('Частота (Hz)')
+    plt.ylabel('Амплитуда')
+    plt.xlim(0, 50)
+    plt.grid(True)
+
+    max_i = np.argmax(A_spectr)
+    max_f = xf[max_i]
+    f_min = xf[0]
+    f_max = max_f
+    width = f_max - f_min
+
+    print(f"Ширина спектра для '{title}': {width:.2f} Hz")
+
+plt.figure(figsize=(12, 10))
+
+plot_fft(y, n, 'Амплитудный спектр оригинального сигнала', 1)
+
+plot_fft(dig_y, dig_n, 'Амплитудный спектр дискретного сигнала', 2)
+
 plt.tight_layout()
 plt.show()
 
