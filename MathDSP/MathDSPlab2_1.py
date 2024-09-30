@@ -9,14 +9,11 @@ Ts = 0.01
 
 t = np.arange(-0.1, 0.1, Ts)
 
-# Формирование гармонического колебания
 s = A * np.cos(2 * np.pi * f * t + phi)
 
-# Опорные колебания
 sc = np.cos(2 * np.pi * f * t)
 ss = np.sin(2 * np.pi * f * t)
 
-# Интегрирование
 m1 = s * sc
 m2 = s * ss
 
@@ -33,7 +30,7 @@ for n in range(1, n_max + 1):
     an[n] = (2 / T) * np.trapezoid(s * np.cos(2 * np.pi * n * f * t), t)
     bn[n] = (2 / T) * np.trapezoid(s * np.sin(2 * np.pi * n * f * t), t)
 
-plt.plot(t, s, label='x(t)')
+plt.plot(t, s, label='s')
 plt.plot(t, sc, label='cos(2πft)')
 plt.plot(t, m1, label='s * cos(2πft)')
 plt.ylim(-2, 2)
