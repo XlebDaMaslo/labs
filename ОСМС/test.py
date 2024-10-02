@@ -91,3 +91,31 @@ plt.ylim(0, 250)
 plt.show()
 
 #4
+d_UL_Macro = d[np.where(PL_COST231 <= MAPL_UL)[0][-1]] if np.any(PL_COST231 <= MAPL_UL) else 0
+d_DL_Macro = d[np.where(PL_COST231 <= MAPL_DL)[0][-1]] if np.any(PL_COST231 <= MAPL_DL) else 0
+
+print(f"Радиус базовой станции для макросот UL: {d_UL_Macro:.4f} м")
+print(f"Радиус базовой станции для макросот DL: {d_DL_Macro:.4f} м")
+
+R_Macro = min(d_UL_Macro, d_DL_Macro)
+print(f"Минимальный радиус макросоты: {R_Macro:.4f} м")
+
+d_UL_Femto = d[np.where(PL_UMiNLOS <= MAPL_UL)[0][-1]] if np.any(PL_UMiNLOS <= MAPL_UL) else 0
+d_DL_Femto = d[np.where(PL_UMiNLOS <= MAPL_DL)[0][-1]] if np.any(PL_UMiNLOS <= MAPL_DL) else 0
+
+print(f"Радиус базовой станции для фемто- и микросот UL: {d_UL_Femto:.4f} м")
+print(f"Радиус базовой станции для фемто- и микросот DL: {d_DL_Femto:.4f} м")
+
+R_Femto = min(d_UL_Femto, d_DL_Femto)
+print(f"Минимальный радиус фемто- и микросоты: {R_Femto:.4f} м")
+
+S_Macro = 1.95 * R_Macro**2
+print(f"Площадь макросоты: {S_Macro:.4f} кв.м")
+NumBS_Macro = np.ceil((AreaTerritory*1000000) / S_Macro)
+print(f"Необходимое количество базовых станций (сайтов): {NumBS_Macro}")
+
+S_Femto = 1.95 * R_Femto**2
+print(f"Площадь фемто- и микросоты: {S_Femto:.4f} кв.м")
+NumBS_Femto = np.ceil((AreaShoppingBusiness*1000000) / S_Femto)
+print(f"Необходимое количество базовых станций (сайтов): {NumBS_Femto}")
+
