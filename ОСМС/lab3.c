@@ -28,17 +28,21 @@ int main() {
     double corr_ac = correlation(a, c, N);
     double corr_bc = correlation(b, c, N);
     
-    printf("Корреляция a и b: %f\n", corr_ab);
-    printf("Корреляция a и c: %f\n", corr_ac);
-    printf("Корреляция b и c: %f\n", corr_bc);
+    printf("Корреляция между a, b и c:\n");
+    printf("   |   a   |   b   |   c  \n");
+    printf("a  |   -   | %.2f | %.2f \n", corr_ab, corr_ac);
+    printf("b  | %.2f |   -   | %.2f \n", corr_ab, corr_bc);
+    printf("c  | %.2f | %.2f |  -  \n\n", corr_ac, corr_bc);
 
     double norm_corr_ab = normalized_correlation(a, b, N);
     double norm_corr_ac = normalized_correlation(a, c, N);
     double norm_corr_bc = normalized_correlation(b, c, N);
 
-    printf("Нормализованная корреляция a и b: %f\n", norm_corr_ab);
-    printf("Нормализованная корреляция a и c: %f\n", norm_corr_ac);
-    printf("Нормализованная корреляция b и c: %f\n", norm_corr_bc);
+    printf("Нормализованная корреляция между a, b и c:\n");
+    printf("   |  a   |  b   |  c  \n");
+    printf("a  |  -   | %.2f | %.2f \n", norm_corr_ab, norm_corr_ac);
+    printf("b  | %.2f |  -   | %.2f \n", norm_corr_ab, norm_corr_bc);
+    printf("c  | %.2f | %.2f |  -  \n", norm_corr_ac, norm_corr_bc);
 
     return 0;
 }
