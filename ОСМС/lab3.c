@@ -10,20 +10,19 @@ double correlation(int a[], int b[], int N) {
 }
 
 double normalized_correlation(int a[], int b[], int N) {
-    double numerator = 0, sum_a = 0, sum_b = 0;
+    double sum_a = 0, sum_b = 0;
     for (int i = 0; i < N; i++) {
-        numerator += a[i] * b[i];
         sum_a += a[i] * a[i];
         sum_b += b[i] * b[i];
     }
-    return numerator / sqrt(sum_a * sum_b);
+    return correlation(a, b, N) / sqrt(sum_a * sum_b);
 }
 
 int main() {
     int a[] = {6, 2, 3, -2, -4, -4, 1, 1};
     int b[] = {3, 1, 5, 0, -3, -4, 2, 3};
     int c[] = {-1, -1, 3, -9, 2, -8, 4, -4};
-    int N = 8;
+    int N = sizeof(a) / sizeof(a[0]);
 
     double corr_ab = correlation(a, b, N);
     double corr_ac = correlation(a, c, N);
