@@ -26,3 +26,22 @@ fprintf('Корреляция между s1(t) и b(t): %.2f\n', corr_sb);
 fprintf('Нормализованная корреляция между a(t) и b(t): %.2f\n', norm_corr_ab);
 fprintf('Нормализованная корреляция между s1(t) и a(t): %.2f\n', norm_corr_sa);
 fprintf('Нормализованная корреляция между s1(t) и b(t): %.2f\n', norm_corr_sb);
+
+a = [0.3, 0.2, -0.1, 4.2, -2, 1.5, 0];
+b = [0.3, 4, -2.2, 1.6, 0.1, 0.1, 0.2];
+
+figure;
+
+subplot(2, 1, 1);
+plot(a, 'o-');
+title('Массив a');
+xlabel('N');
+ylabel('Значение');
+grid on;
+
+subplot(2, 1, 2);
+plot(b, 'o-');
+title('Массив b');
+xlabel('N');
+ylabel('Значение');
+grid on;
