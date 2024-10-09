@@ -30,18 +30,38 @@ fprintf('Нормализованная корреляция между s1(t) и
 a = [0.3, 0.2, -0.1, 4.2, -2, 1.5, 0];
 b = [0.3, 4, -2.2, 1.6, 0.1, 0.1, 0.2];
 
+N = length(a);
+correlations = zeros(1, N); 
+
+for shift = 0:N-1
+    b_shifted = [b(end-shift+1:end), b(1:end-shift)];
+    correlations(shift + 1) = sum(a .* b_shifted);
+end
+
+[max_corr, max_index] = max(correlations);
+
+fprintf('Максимальная корреляция: %.2f при сдвиге: %d\n', max_corr, max_index - 1);
+
 figure;
 
 subplot(2, 1, 1);
 plot(a, 'o-');
 title('Массив a');
-xlabel('N');
+xlabel('Индекс');
 ylabel('Значение');
 grid on;
 
+b_max_shifted = [b(end-max_index+2:end), b(1:end-max_index+1)];
 subplot(2, 1, 2);
-plot(b, 'o-');
-title('Массив b');
-xlabel('N');
+plot(b_max_shifted, 'o-');
+title(['Сдвинутый массив b (сдвиг: ', num2str(max_index - 1), ')']);
+xlabel('Индекс');
 ylabel('Значение');
+grid on;
+
+figure;
+plot(0:N-1, correlations, '-o');
+title('Взаимная корреляция между a и сдвинутым b');
+xlabel('Сдвиг');
+ylabel('Корреляция');
 grid on;
