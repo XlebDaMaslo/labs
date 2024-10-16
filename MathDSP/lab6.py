@@ -22,12 +22,12 @@ def manual_convolution(signal1, signal2):
         result[i] = sum
     return result
 
-width1 = 75
+width1 = 500
 height1 = 1
-width2 = 10
+width2 = 500
 height2 = 1
 
-t = 200
+t = 700
 
 signal1 = rect_signal(width1, height1, t)
 signal2 = rect_signal(width2, height2, t)
