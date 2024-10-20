@@ -8,6 +8,8 @@ for i = 1:L
 
 end
 
+disp(T);
+
 G = graph(T);
 
 plot(G)
