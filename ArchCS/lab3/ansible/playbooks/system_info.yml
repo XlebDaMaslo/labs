@@ -1,0 +1,16 @@
+---
+- name: Gather and write system information
+  hosts: all
+  gather_facts: yes
+
+  tasks:
+    - name: Create structured system information file from template
+      ansible.builtin.template:
+        src: templates/system_info.j2
+        dest: /tmp/system_info_{{ inventory_hostname }}.json
+
+    - name: Fetch the system information file to local machine
+      fetch:
+        src: /tmp/system_info_{{ inventory_hostname }}.json
+        dest: ~/labs/labs/ArchCS/lab3/system_info_{{ inventory_hostname }}.json
+        flat: yes

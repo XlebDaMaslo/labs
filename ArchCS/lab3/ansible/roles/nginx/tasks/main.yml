@@ -1,0 +1,21 @@
+---
+- name: Ensure Nginx is installed
+  apt:
+    name: nginx
+    state: present
+  become: true
+
+- name: Start and enable Nginx service
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: Create a custom index.html
+  copy:
+    content: "<html><body><h1>Hello from Ansible managed server!</h1></body></html>"
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  become: true

@@ -10,7 +10,7 @@ function is_stochastic = stochastic(matrix)
     end
     
     row_sums = sum(matrix, 2);
-    if any(abs(row_sums - 1) > 1e-6)
+    if any(abs(row_sums - 1) > 0.001)
         is_stochastic = false;
         return;
     end

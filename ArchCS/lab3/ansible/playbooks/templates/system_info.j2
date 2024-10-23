@@ -1,0 +1,21 @@
+{
+  "system_info": {
+    "os": {
+      "name": "{{ ansible_facts['distribution'] | default('N/A') }}",
+      "version": "{{ ansible_facts['distribution_version'] | default('N/A') }}"
+    },
+    "kernel": {
+      "version": "{{ ansible_facts['kernel'] | default('N/A') }}",
+      "architecture": "{{ ansible_facts['architecture'] | default('N/A') }}"
+    },
+    "cpu": {
+      "model": "{{ ansible_facts['processor'][2] | default('N/A') }}",
+      "cores": "{{ ansible_facts['processor_cores'] | default('N/A') }}",
+    },
+    "memory": {
+      "total": "{{ ansible_facts['memtotal_mb'] | default('N/A') }} MB",
+      "used": "{{ (ansible_facts['memtotal_mb'] - ansible_facts['memfree_mb']) | default('N/A') }} MB",
+      "free": "{{ ansible_facts['memfree_mb'] | default('N/A') }} MB"
+    }
+  }
+}

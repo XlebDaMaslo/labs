@@ -1,0 +1,19 @@
+---
+- name: Run lab1.sh and gather system information
+  become: 
+  hosts: all
+  tasks:
+    - name: Copy lab1.sh to remote hosts
+      copy:
+        src: ~/labs/labs/ArchCS/lab3/lab1.sh
+        dest: /tmp/lab1.sh
+        mode: '0755'
+
+    - name: Run lab1.sh on remote hosts
+      command: /tmp/lab1.sh
+
+    - name: Save the output to a file on the local machine
+      fetch:
+        src: /tmp/lab1_output.txt
+        dest: ~/labs/labs/ArchCS/lab3/{{ inventory_hostname }}_lab1_output.txt
+        flat: yes

@@ -1,0 +1,21 @@
+{
+  "system_info": {
+    "os": {
+      "name": "Ubuntu",
+      "version": "22.04"
+    },
+    "kernel": {
+      "version": "5.15.153.1-microsoft-standard-WSL2",
+      "architecture": "x86_64"
+    },
+    "cpu": {
+      "model": "12th Gen Intel(R) Core(TM) i7-12700H",
+      "cores": "10",
+    },
+    "memory": {
+      "total": "7728 MB",
+      "used": "1796 MB",
+      "free": "5932 MB"
+    }
+  }
+}
