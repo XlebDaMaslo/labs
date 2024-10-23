@@ -21,35 +21,46 @@ plt.plot(t, signal)
 plt.title('Оригинальный сигнал')
 plt.xlabel('Время')
 plt.ylabel('Амплитуда')
+plt.axhline(0, color='black', linewidth=0.5)
+plt.ylim(-2.5, 2.5)
 
 sampling_rate_1 = max_freq
 t1 = np.arange(0, 0.1, 1/sampling_rate_1)
 signal1 = signal[::int(sampling_rate / sampling_rate_1)]
 
 plt.subplot(2, 2, 2)
-plt.plot(t1, signal1)
+#plt.plot(t1, signal1)
+plt.bar(t1, signal1, width=1/sampling_rate_1, align='center', label='Дискретный сигнал', edgecolor='black', fill=False)
 plt.title(f'Сигнал с частотой дискретизации {sampling_rate_1} Гц')
 plt.xlabel('Время')
 plt.ylabel('Амплитуда')
+plt.axhline(0, color='black', linewidth=0.5)
+plt.ylim(-2.5, 2.5)
 
 sampling_rate_2 = 2 * max_freq
 t2 = np.arange(0, 0.1, 1/sampling_rate_2)
 signal2 = signal[::int(sampling_rate / sampling_rate_2)]
 
 plt.subplot(2, 2, 3)
-plt.plot(t2, signal2)
+#plt.plot(t2, signal2)
+plt.bar(t2, signal2, width=1/sampling_rate_2, align='center', label='Дискретный сигнал', edgecolor='black', fill=False)
 plt.title(f'Сигнал с частотой дискретизации {sampling_rate_2} Гц')
 plt.xlabel('Время')
 plt.ylabel('Амплитуда')
+plt.axhline(0, color='black', linewidth=0.5)
+plt.ylim(-2.5, 2.5)
 
 sampling_rate_3 = 5 * max_freq
 t3 = np.arange(0, 0.1, 1/sampling_rate_3)
 signal3 = signal[::int(sampling_rate / sampling_rate_3)]
 
 plt.subplot(2, 2, 4)
-plt.plot(t3, signal3)
+#plt.plot(t3, signal3)
+plt.bar(t3, signal3, width=1/sampling_rate_3, align='center', label='Дискретный сигнал', edgecolor='black', fill=False)
 plt.title(f'Сигнал с частотой дискретизации {sampling_rate_3} Гц')
 plt.xlabel('Время')
 plt.ylabel('Амплитуда')
+plt.axhline(0, color='black', linewidth=0.5)
+plt.ylim(-2.5, 2.5)
 
 plt.show()
