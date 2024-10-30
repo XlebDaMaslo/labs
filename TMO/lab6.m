@@ -44,7 +44,7 @@ nu_n_weibull = wblrnd(theta_weibull, k_weibull, 1, N);
 M_tau = mean(tau_n);
 D_tau_sample = var(tau_n);
 
-% G/G/1 с Вейбулловским распределением времени обслуживания
+% G/G/1
 M_nu_weibull = mean(nu_n_weibull);
 D_nu_weibull_sample = var(nu_n_weibull);
 
@@ -53,13 +53,33 @@ fprintf('-----------------------------------------\n');
 fprintf('M/M/1:\n');
 fprintf('  tau_n:  Среднее = %f, Дисперсия = %f\n', M_tau, D_tau_sample);
 
-fprintf('\nG/G/1 (Вейбулловское распределение времени обслуживания):\n');
+fprintf('\nG/G/1\n');
 fprintf('  nu_n:   Среднее = %f, Дисперсия = %f\n', M_nu_weibull, D_nu_weibull_sample);
 
 fprintf('\nСравнение аналитических и статистических характеристик:\n');
-fprintf('-------------------------------------------------------------\n');
-fprintf('M/M/1 (tau_n):   | Аналитическое: E = %.4f, D = %.4f\n', E_tau, D_tau);
-fprintf('                | Статистическое: E = %.4f, D = %.4f\n', M_tau, D_tau_sample);
+fprintf('M/M/1:\n');
+fprintf('Аналитическое: E = %.4f, D = %.4f\n', E_tau, D_tau);
+fprintf('Статистическое: E = %.4f, D = %.4f\n', M_tau, D_tau_sample);
 
-fprintf('G/G/1 (nu_n, Вейбулл): | Аналитическое: E = %.4f, D = %.4f\n', E_nu_weibull, D_nu_weibull);
-fprintf('                      | Статистическое: E = %.4f, D = %.4f\n', M_nu_weibull, D_nu_weibull_sample);
+fprintf('G/G/1:\n');
+fprintf('Аналитическое: E = %.4f, D = %.4f\n', E_nu_weibull, D_nu_weibull);
+fprintf('Статистическое: E = %.4f, D = %.4f\n', M_nu_weibull, D_nu_weibull_sample);
+
+
+% M/M/1
+figure;
+x = linspace(0, max(tau_n), 100);
+y = lambda * exp(-lambda * x);
+plot(x, y, 'r-', 'LineWidth', 2);
+title('M/M/1');
+xlabel('Время между поступлениями');
+ylabel('Плотность вероятности');
+
+% M/G/1
+figure;
+x = linspace(0, max(nu_n_weibull), 100);
+y = (k_weibull / theta_weibull) * (x / theta_weibull).^(k_weibull - 1) .* exp(-(x / theta_weibull).^k_weibull);
+plot(x, y, 'r-', 'LineWidth', 2);
+title('M/G/1');
+xlabel('Время обслуживания');
+ylabel('Плотность вероятности');
