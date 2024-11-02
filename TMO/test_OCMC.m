@@ -40,7 +40,7 @@ function autocorr(seq)
             correlation = acor(n + i);
         else
             compare = zeros(1, n);
-            correlation = 0; % для значений, которые превышают длину последовательности
+            correlation = 0;
         end
         fprintf('%d       ', i);
         fprintf(' | %d', compare);

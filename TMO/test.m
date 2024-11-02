@@ -1,186 +1,83 @@
-mu = 3;
-rho_values = 0:0.01:0.99;
-Cb_squared_values = [0, 1, 10, 20, 30:10:100]; % Значения нормированной дисперсии
+f1 = 10;
+f2 = f1 + 4;
+f3 = f1 * 2 + 1;
 
-%% 3
-function Nq = Nq_MG1(rho, Cb_squared) % 7.1
-    Nq = rho^2 * (1 + Cb_squared) / (2 * (1 - rho));
-end
+t = linspace(0, 1, 1000);
+%t = [0:1000-1]/1000;
 
-function N = N_MG1(rho, Cb_squared) % 7.2
-    N = Nq_MG1(rho, Cb_squared) + rho;
-end
+s1 = cos(2 * pi * f1 * t);
+s2 = cos(2 * pi * f2 * t);
+s3 = cos(2 * pi * f3 * t);
 
-function Wq = Wq_MG1(rho, Cb_squared, mu) % 7.3
-    x_mean = 1 / mu;
-    Wq = rho * x_mean * (1 + Cb_squared) / (2 * (1 - rho));
-end
+a_t = 5 * s1 + 4 * s2 + s3;
+b_t = 3 * s1 + s3;
 
-function W = W_MG1(rho, Cb_squared, mu) % 7.4
-    x_mean = 1 / mu;
-    W = Wq_MG1(rho, Cb_squared, mu) + x_mean;
-end
+corr_ab = sum(a_t .* b_t);
+corr_sa = sum(s1 .* a_t);
+corr_sb = sum(s1 .* b_t);
+norm_corr_ab = corr(a_t', b_t');
+norm_corr_sa = corr(s1', a_t');
+norm_corr_sb = corr(s1', b_t');
 
-%% 4
-function Nq = Nq_MD1(rho) % 7.5
-    Nq = rho^2 / (2 * (1 - rho));
-end
+fprintf('Корреляция между a(t) и b(t): %.2f\n', corr_ab);
+fprintf('Корреляция между s1(t) и a(t): %.2f\n', corr_sa);
+fprintf('Корреляция между s1(t) и b(t): %.2f\n', corr_sb);
 
-function Wq = Wq_MD1(rho, mu) % 7.7
-    x_mean = 1 / mu;
-    Wq = (rho * x_mean) / (2 * (1 - rho));
-end
+fprintf('Нормализованная корреляция между a(t) и b(t): %.2f\n', norm_corr_ab);
+fprintf('Нормализованная корреляция между s1(t) и a(t): %.2f\n', norm_corr_sa);
+fprintf('Нормализованная корреляция между s1(t) и b(t): %.2f\n', norm_corr_sb);
 
-function N = N_MD1(rho) % 7.6
-    N = Nq_MD1(rho) + rho;
-end
+a = [0.3, 0.2, -0.1, 4.2, -2, 1.5, 0];
+b = [0.3, 4, -2.2, 1.6, 0.1, 0.1, 0.2];
 
-function W = W_MD1(rho, mu) % 7.8
-    x_mean = 1 / mu;
-    W = (x_mean * (2 - rho)) / (2 * (1 - rho));
-end
-
-%% 5
-function Nq = Nq_MM1(rho) % 7.9
-    Nq = rho^2 / (1 - rho);
-end
-
-function Wq = Wq_MM1(rho, mu) % 7.11
-    x_mean = 1 / mu;
-    Wq = (rho * x_mean) / (1 - rho);
-end
-
-function N = N_MM1(rho) % 7.10
-    N = rho / (1 - rho);
-end
-
-function W = W_MM1(rho, mu) % 7.12
-    x_mean = 1 / mu;
-    W = x_mean / (1 - rho);
-end
-
-%% 2
-for i = 1:length(rho_values)
-    rho = rho_values(i); % Коэффициент использования системы
-    for j = 1:length(Cb_squared_values)
-        Cb_squared = Cb_squared_values(j);
-        
-        Nq_MG1_values(i, j) = Nq_MG1(rho, Cb_squared);
-        Wq_MG1_values(i, j) = Wq_MG1(rho, Cb_squared, mu);
-        N_MG1_values(i, j) = N_MG1(rho, Cb_squared);
-        W_MG1_values(i, j) = W_MG1(rho, Cb_squared, mu);
-        
-        Nq_MD1_values(i) = Nq_MD1(rho);
-        Wq_MD1_values(i) = Wq_MD1(rho, mu);
-        N_MD1_values(i) = N_MD1(rho);
-        W_MD1_values(i) = W_MD1(rho, mu);
-        
-        Nq_MM1_values(i) = Nq_MM1(rho);
-        Wq_MM1_values(i) = Wq_MM1(rho, mu);
-        N_MM1_values(i) = N_MM1(rho);
-        W_MM1_values(i) = W_MM1(rho, mu);
-    end
-end
-
-%% 6
-% M/G/1
 figure;
-sgtitle('M/G/1');
 
-subplot(2, 2, 1);
-plot(rho_values, Nq_MG1_values);
-xlabel('Коэффициент загрузки');
-ylabel('Средняя длина очереди');
-title('Средняя длина очереди');
-legend(string(Cb_squared_values), 'Location', 'northwest');
-xlim([0.7 1]);
+subplot(2, 1, 1);
+plot(a, 'o-');
+title('Массив a');
+xlabel('N');
+ylabel('Значение');
+grid on;
 
-subplot(2, 2, 2);
-plot(rho_values, Wq_MG1_values);
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время ожидания в очереди');
-title('Среднее время ожидания в очереди');
-legend(string(Cb_squared_values), 'Location', 'northwest');
-xlim([0.7 1]);
+subplot(2, 1, 2);
+plot(b, 'o-');
+title(['Массив b']);
+xlabel('N');
+ylabel('Значение');
+grid on;
 
-subplot(2, 2, 3);
-plot(rho_values, N_MG1_values);
-xlabel('Коэффициент загрузки');
-ylabel('Среднее число заявок в системе');
-title('Среднее число заявок в системе');
-legend(string(Cb_squared_values), 'Location', 'northwest');
-xlim([0.7 1]);
+N = length(a);
+correlations = zeros(1, N); 
 
-subplot(2, 2, 4);
-plot(rho_values, W_MG1_values);
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время пребывания заявки в системе');
-title('Среднее время пребывания заявки в системе');
-legend(string(Cb_squared_values), 'Location', 'northwest');
-xlim([0.7 1]);
+for shift = 0:N-1
+    b_shifted = [b(end-shift+1:end), b(1:end-shift)];
+    correlations(shift + 1) = sum(a .* b_shifted);
+end
 
+[max_corr, max_index] = max(correlations);
 
-% M/D/1
+fprintf('Максимальная корреляция: %.2f при сдвиге: %d\n', max_corr, max_index - 1);
+
 figure;
-sgtitle('M/D/1');
 
-subplot(2, 2, 1);
-plot(rho_values, Nq_MD1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Средняя длина очереди');
-title('Средняя длина очереди');
-xlim([0.7 1]);
+subplot(2, 1, 1);
+plot(a, 'o-');
+title('Массив a');
+xlabel('Индекс');
+ylabel('Значение');
+grid on;
 
-subplot(2, 2, 2);
-plot(rho_values, Wq_MD1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время ожидания в очереди');
-title('Среднее время ожидания в очереди');
-xlim([0.7 1]);
+b_max_shifted = [b(end-max_index+2:end), b(1:end-max_index+1)];
+subplot(2, 1, 2);
+plot(b_max_shifted, 'o-');
+title(['Сдвинутый массив b (сдвиг: ', num2str(max_index - 1), ')']);
+xlabel('Индекс');
+ylabel('Значение');
+grid on;
 
-subplot(2, 2, 3);
-plot(rho_values, N_MD1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее число заявок в системе');
-title('Среднее число заявок в системе');
-xlim([0.7 1]);
-
-subplot(2, 2, 4);
-plot(rho_values, W_MD1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время пребывания заявки в системе');
-title('Среднее время пребывания заявки в системе');
-xlim([0.7 1]);
-
-
-% M/M/1
 figure;
-sgtitle('M/M/1');
-
-subplot(2, 2, 1);
-plot(rho_values, Nq_MM1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Средняя длина очереди');
-title('Средняя длина очереди');
-xlim([0.7 1]);
-
-subplot(2, 2, 2);
-plot(rho_values, Wq_MM1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время ожидания в очереди');
-title('Среднее время ожидания в очереди');
-xlim([0.7 1]);
-
-subplot(2, 2, 3);
-plot(rho_values, N_MM1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее число заявок в системе');
-title('Среднее число заявок в системе');
-xlim([0.7 1]);
-
-subplot(2, 2, 4);
-plot(rho_values, W_MM1_values, '-');
-xlabel('Коэффициент загрузки');
-ylabel('Среднее время пребывания заявки в системе');
-title('Среднее время пребывания заявки в системе');
-xlim([0.7 1]);
+plot(0:N-1, correlations, '-o');
+title('Взаимная корреляция между a и сдвинутым b');
+xlabel('Сдвиг');
+ylabel('Корреляция');
+grid on;
