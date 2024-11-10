@@ -1,12 +1,18 @@
-% Основные параметры
+%% Основные параметры
 lambda = 1; % интенсивность потока заявок (например, 1 заявка в единицу времени)
 x_mean = 5; % среднее время обслуживания (например, 5 единиц времени)
 mu = 1 / x_mean; % интенсивность обслуживания
 rho_vals = linspace(0.01, 0.99, 100); % коэффициент загрузки (0 < ρ < 1)
 C2b_vals = 0:10:100; % нормированная дисперсия обслуживания для M/G/1
 
-%% Функции для расчета характеристик
-% Функция для M/G/1
+%% Общая функция для проверки значений rho
+function check_rho(rho)
+    if rho >= 1
+        warning('Значение \rho слишком близко к 1. Пропускаем расчет.');
+    end
+end
+
+%% Функция для расчета характеристик для M/G/1
 function [Nq, N, W, T] = MG1_calculations(rho_vals, x_mean, C2b_vals)
     Nq = zeros(length(C2b_vals), length(rho_vals));
     N = zeros(length(C2b_vals), length(rho_vals));
@@ -17,10 +23,7 @@ function [Nq, N, W, T] = MG1_calculations(rho_vals, x_mean, C2b_vals)
         C2b = C2b_vals(i);
         for j = 1:length(rho_vals)
             rho = rho_vals(j);
-            if rho >= 1
-                warning('Значение \rho слишком близко к 1. Пропускаем расчет.');
-                continue;
-            end
+            check_rho(rho);  % Проверка rho
             % Вычисления для M/G/1
             Nq(i,j) = (rho^2 * (1 + C2b)) / (2 * (1 - rho));
             N(i,j) = rho + Nq(i,j);
@@ -30,7 +33,7 @@ function [Nq, N, W, T] = MG1_calculations(rho_vals, x_mean, C2b_vals)
     end
 end
 
-% Функция для M/D/1
+%% Функция для расчета характеристик для M/D/1
 function [Nq, N, W, T] = MD1_calculations(rho_vals, x_mean)
     Nq = zeros(1, length(rho_vals));
     N = zeros(1, length(rho_vals));
@@ -39,10 +42,7 @@ function [Nq, N, W, T] = MD1_calculations(rho_vals, x_mean)
     
     for j = 1:length(rho_vals)
         rho = rho_vals(j);
-        if rho >= 1
-            warning('Значение \rho слишком близко к 1. Пропускаем расчет.');
-            continue;
-        end
+        check_rho(rho);  % Проверка rho
         % Вычисления для M/D/1
         Nq(j) = rho^2 / (2 * (1 - rho));
         N(j) = Nq(j) + rho;
@@ -51,7 +51,7 @@ function [Nq, N, W, T] = MD1_calculations(rho_vals, x_mean)
     end
 end
 
-% Функция для M/M/1
+%% Функция для расчета характеристик для M/M/1
 function [Nq, N, W, T] = MM1_calculations(rho_vals, x_mean)
     Nq = zeros(1, length(rho_vals));
     N = zeros(1, length(rho_vals));
@@ -60,10 +60,7 @@ function [Nq, N, W, T] = MM1_calculations(rho_vals, x_mean)
     
     for j = 1:length(rho_vals)
         rho = rho_vals(j);
-        if rho >= 1
-            warning('Значение \rho слишком близко к 1. Пропускаем расчет.');
-            continue;
-        end
+        check_rho(rho);  % Проверка rho
         % Вычисления для M/M/1
         Nq(j) = rho^2 / (1 - rho);
         N(j) = rho / (1 - rho);
@@ -72,10 +69,9 @@ function [Nq, N, W, T] = MM1_calculations(rho_vals, x_mean)
     end
 end
 
-%% Функция для построения графиков
+%% Функция для построения графиков для M/G/1
 function plot_results_MG1(rho_vals, Nq, N, W, T, C2b_vals)
     figure;
-    
     subplot(2,2,1);
     for i = 1:length(C2b_vals)
         plot(rho_vals, Nq(i,:)); hold on;
@@ -109,6 +105,7 @@ function plot_results_MG1(rho_vals, Nq, N, W, T, C2b_vals)
     legend(arrayfun(@(x) ['C2b = ', num2str(x)], C2b_vals, 'UniformOutput', false));
 end
 
+%% Функция для построения графиков для других систем
 function plot_results(rho_vals, Nq, N, W, T, system_name)
     figure;
     subplot(2,2,1);
