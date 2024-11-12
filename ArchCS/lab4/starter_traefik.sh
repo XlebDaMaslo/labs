@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# Check if the number of containers is provided
 if [ -z "$1" ]; then
-  echo "Usage: ./run_traefik.sh N"
+  echo "Пример команды: ./run_traefik.sh N"
   exit 1
 fi
 
 NUM_CONTAINERS=$1
-
 mkdir -p traefik
 
 cat > traefik/traefik.yml <<EOL
@@ -27,7 +25,6 @@ providers:
   docker:
     exposedByDefault: false
 EOL
-
 
 docker run -d \
   --name traefik \
@@ -52,12 +49,9 @@ EOL
     --name web$i \
     --network bridge \
     -l "traefik.enable=true" \
-    -l "traefik.http.routers.web$i.rule=Host(\`web$i.local\`)" \
-    -l "traefik.http.services.web$i.loadbalancer.server.port=80" \
+    -l "traefik.http.routers.myweb.rule=Host(\`localhost\`)" \
+    -l "traefik.http.services.myweb.loadbalancer.server.port=80" \
     web$i
 done
 
-echo "Started $NUM_CONTAINERS containers with Traefik. Traefik is running on port 80 and 8080 (for metrics)."
-echo "Metrics are available at: http://localhost:8080/metrics"
-echo "Access logs are enabled in the Traefik configuration."
-echo "You can access the containers at: http://web1.local, http://web2.local, ..."
+echo "Запущено $NUM_CONTAINERS контейнеров с балансировкой на localhost через Traefik (порт 80)"
