@@ -31,14 +31,14 @@ w3_50, x3w_50 = signal.freqz(x3_50, 1, whole=1)
 ## 2 Численная проверка свойств ДВПФ
 # Линейность
 
-x_sum_10 = x1_10 + x3_10
-w_sum_10, x_sumw_10 = signal.freqz(x_sum_10, 1, whole=1)
+x_sum_50 = x1_50 + x3_50
+w_sum_50, x_sumw_50 = signal.freqz(x_sum_50, 1, whole=1)
 
-x_sumw_check_10 = x1w_10 + x3w_10
+x_sumw_check_50 = x1w_50 + x3w_50
 
 plt.figure()
-plt.plot(w_sum_10, np.abs(x_sumw_10), label='Спектр суммы сигналов (x1_10 + x3_10)')
-plt.plot(w_sum_10, np.abs(x_sumw_check_10), '--', label='Сумма спектров (x1w_10 + x3w_10)')
+plt.plot(w_sum_50, np.abs(x_sumw_50), label='Спектр суммы сигналов (x1_50 + x3_50)')
+plt.plot(w_sum_50, np.abs(x_sumw_check_50), '--', label='Сумма спектров (x1w_50 + x3w_50)')
 plt.legend()
 plt.title('Сравнение спектров суммы сигналов и суммы спектров')
 
