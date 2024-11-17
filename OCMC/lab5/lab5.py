@@ -5,7 +5,7 @@ def generate_data(N):
 
 def calculate_crc(data, polynomial):
     polynomial_len = len(polynomial)
-    data += '0' * (polynomial_len - 1)  # Добавление нулей
+    data += '0' * (polynomial_len - 1) 
 
     data_len = len(data)
 
@@ -32,8 +32,7 @@ def calculate_crc_receiver(data_with_crc, polynomial):
     error = any(bit == '1' for bit in crc)  # Ошибка, если CRC не все нули
     return crc, error
 
-def bit_distortion(data, index):
-    # Искажение бита в строке данных (меняет '0' на '1' и наоборот)
+def bit_distortion(data, index): # Искажение бита в строке данных
     return data[:index] + ('1' if data[index] == '0' else '0') + data[index + 1:]
 
 # 1, 2
@@ -57,8 +56,6 @@ else:
 
 # 4
 N = 250
-data = generate_data(N)
-
 data = generate_data(N)
 crc = calculate_crc(data, polynomial)
 
