@@ -25,12 +25,11 @@ def calculate_crc_receiver(data_with_crc, polynomial):
     for i in range(data_len - polynomial_len + 1):
         if data_with_crc[i] == '1':
             for j in range(polynomial_len):
-                data_with_crc = data_with_crc[:i+j] + str(int(data_with_crc[i+j]) ^ int(polynomial[j])) + data_with_crc[i+j+1:]
+                data_with_crc = data_with_crc[:i + j] + str(int(data_with_crc[i + j]) ^ int(polynomial[j])) + data_with_crc[i + j + 1:]
 
+    crc_check = data_with_crc[-(polynomial_len - 1):]
 
-    crc = data_with_crc[-polynomial_len + 1:]
-    error = any(bit == '1' for bit in crc)  # Ошибка, если CRC не все нули
-    return crc, error
+    return crc_check
 
 def bit_distortion(data, index): # Искажение бита в строке данных
     return data[:index] + ('1' if data[index] == '0' else '0') + data[index + 1:]
@@ -45,11 +44,11 @@ print("CRC на передатчике:", crc)
 
 # 3
 data_with_crc = data + crc
-crc_receiver, has_error = calculate_crc_receiver(data_with_crc, polynomial)
+crc_receiver = calculate_crc_receiver(data_with_crc, polynomial)
 
 print("CRC на приемнике:", crc_receiver)
 
-if has_error:
+if crc_receiver != crc:
     print("Ошибка обнаружена!")
 else:
     print("Передача без ошибок.")
@@ -67,9 +66,9 @@ errors_not_detected = 0
 
 for i in range(len(data_with_crc)):
     corrupted_data_with_crc = bit_distortion(data_with_crc, i)
-    crc_receiver, has_error = calculate_crc_receiver(corrupted_data_with_crc, polynomial)
+    crc_receiver = calculate_crc_receiver(corrupted_data_with_crc, polynomial)
 
-    if has_error:
+    if crc_receiver != crc:
         errors_detected += 1
     else:
         errors_not_detected += 1

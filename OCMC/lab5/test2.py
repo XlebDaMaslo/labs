@@ -5,35 +5,32 @@ def generate_data(N):
 
 def calculate_crc(data, polynomial):
     polynomial_len = len(polynomial)
-    data += '0' * (polynomial_len - 1)  # Добавляем нули для вычисления остатка (CRC)
-
+    data += '0' * (polynomial_len - 1)
     data_len = len(data)
 
     for i in range(data_len - polynomial_len + 1):
         if data[i] == '1':
             for j in range(polynomial_len):
                 data = data[:i + j] + str(int(data[i + j]) ^ int(polynomial[j])) + data[i + j + 1:]
+        else: pass
 
     crc = data[-(polynomial_len - 1):]
     return crc
 
 def calculate_crc_receiver(data_with_crc, polynomial):
     polynomial_len = len(polynomial)
-    crc_len = polynomial_len - 1
+    data_len = len(data_with_crc)
 
-    data = data_with_crc[:-crc_len]  # Данные без CRC
-    received_crc = data_with_crc[-crc_len:]  # Полученный CRC (последние биты)
+    for i in range(data_len - polynomial_len + 1):
+        if data_with_crc[i] == '1':
+            for j in range(polynomial_len):
+                data_with_crc = data_with_crc[:i + j] + str(int(data_with_crc[i + j]) ^ int(polynomial[j])) + data_with_crc[i + j + 1:]
 
-    calculated_crc = calculate_crc(data, polynomial)
+    crc_check = data_with_crc[-(polynomial_len - 1):]
 
-    crc_match = received_crc == calculated_crc
+    return crc_check
 
-    error = not crc_match
-
-    return calculated_crc, error
-
-
-def bit_distortion(data, index): # Искажение бита в строке данных
+def bit_distortion(data, index):
     return data[:index] + ('1' if data[index] == '0' else '0') + data[index + 1:]
 
 N = 2000
@@ -54,21 +51,23 @@ errors_not_detected_8 = 0
 
 for i in range(len(data_with_crc4)):
     corrupted_data_with_crc = bit_distortion(data_with_crc4, i)
-    crc_receiver, has_error = calculate_crc_receiver(corrupted_data_with_crc, polynomial[0])
+    crc_receiver = calculate_crc_receiver(corrupted_data_with_crc, polynomial[0])
+    #print(crc_receiver[-(len(polynomial[0])) + 1:])
 
-    if has_error:
+    if crc_receiver != crc4:
         errors_detected_4 += 1
     else:
         errors_not_detected_4 += 1
+
 
 print(f"Обнаружено ошибок для полинома {polynomial[0]}: {errors_detected_4}")
 print(f"Не обнаружено ошибок для полинома {polynomial[0]}: {errors_not_detected_4}")
 
 for i in range(len(data_with_crc8)):
     corrupted_data_with_crc = bit_distortion(data_with_crc8, i)
-    crc_receiver, has_error = calculate_crc_receiver(corrupted_data_with_crc, polynomial[1])
+    crc_receiver = calculate_crc_receiver(corrupted_data_with_crc, polynomial[1])
 
-    if has_error:
+    if crc_receiver != crc8:
         errors_detected_8 += 1
     else:
         errors_not_detected_8 += 1
