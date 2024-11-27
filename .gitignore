@@ -3,5 +3,6 @@
 *.txt
 *.asv
 *.json
-test
+test*
 *.out
+__pycache__

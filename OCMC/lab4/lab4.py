@@ -102,6 +102,8 @@ def normalized_correlation(a, b):
 def corr_print(seq1, seq2):
     header = f"{'\nСдвиг':<8}{' | '.join([f'{i+1}' for i in range(len(seq1))])} | {'Корреляция'} | {'Норм. корреляция':}"
     print(header)
+    shift = 0
+    t_cor = 0
     for i in range(len(seq1)+1):
         compare = []
         for j in range(len(seq1)):
@@ -113,23 +115,26 @@ def corr_print(seq1, seq2):
         n_corr = normalized_correlation(seq1, seq2)
         bits = ' | '.join(map(str, compare))
         print(f"{i:<8}{bits} | { corr:>8} | { n_corr}")
+        if n_corr > t_cor:
+            shift = i
+            t_cor = n_corr
         seq2 = [seq2[len(seq2)-1]] + seq2[:-1]
-    return 0
+    return shift
     
+if __name__ == "__main__":
+    number_st = 10 # Номер по списку
+    number_st2 = number_st + 7
 
-number_st = 10 # Номер по списку
-number_st2 = number_st + 7
+    # x^5 + x^4 + 1 первый регистр по схеме
+    polynomial1_bin = "00011"
 
-# x^5 + x^4 + 1 первый регистр по схеме
-polynomial1_bin = "00011"
+    # x^5 + x^2 + 1 второй регистр по схеме
+    polynomial2_bin = "01001"
 
-# x^5 + x^2 + 1 второй регистр по схеме
-polynomial2_bin = "01001"
+    sequence1 = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
+    print(sequence1)
+    print(sequence1.count(1), sequence1.count(0))
+    autocorr(sequence1)
 
-sequence1 = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
-print(sequence1)
-print(sequence1.count(1), sequence1.count(0))
-autocorr(sequence1)
-
-sequence2 = gen_gold_seq(number_st+1, (number_st+7)-5, polynomial1_bin, polynomial2_bin)
-corr_print(sequence1, sequence2)
+    sequence2 = gen_gold_seq(number_st+1, (number_st+7)-5, polynomial1_bin, polynomial2_bin)
+    print(corr_print(sequence1, sequence2))
