@@ -139,9 +139,8 @@ noise = np.random.normal(0, sigma, len(signal))
 
 received_signal = signal + noise
 
-
 print("Received Signal (with noise):", received_signal)
-visualize(received_signal, "Received Signal (with noise)")
+visualize(received_signal, f"Received Signal (with noise: sigma = {sigma})")
 
 ## 8
 start_index = correlate(received_signal, gold_sequence, N)
