@@ -6,3 +6,4 @@
 test*
 *.out
 __pycache__
+.idea
