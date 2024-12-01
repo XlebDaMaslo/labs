@@ -8,6 +8,7 @@ from lab4.lab4 import gen_gold_seq
 
 import matplotlib.pyplot as plt
 import numpy as np
+from crc import Calculator, Crc8
 
 def ascii_encoder(text):
     encoded_bits = []
@@ -200,9 +201,11 @@ plot_spectrum(received_signal_long, fs, f"Received Signal Spectrum (N={N_long})"
 plot_spectrum(received_signal, fs, "Received Signal Spectrum (Noisy)")
 plot_spectrum(received_signal_short, fs, f"Received Signal Spectrum (N={N_short})")
 #plot_spectrum(signal, fs, "Transmitted Signal Spectrum")
-plt.xlim([-200, 200])
+plt.xlim([-150, 150])
 
 plt.legend([f"Received (N={N_long})", "Received (N)", f"Received (N={N_short})"])
 plt.grid(True)
 
 plt.show()
+
+# добавить стоп слово, профилирование( использовать штатную библиотеку и свою) проверив разницу 
