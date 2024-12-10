@@ -28,7 +28,7 @@ for M in M_values:
         elif window_type == 'kaiser':
             window = np.kaiser(2 * M + 1, beta=4)
         else:
-            window = getattr(np, window_type)(2 * M + 1)
+            window = getattr(np, window_type)(2 * M + 1) # аналогично np.hanning(2 * M + 1) или другое окно
 
         h = h_ideal * window
 
