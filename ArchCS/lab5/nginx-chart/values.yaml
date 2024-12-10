@@ -1,0 +1,10 @@
+replicaCount: 3
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: ""
+ingress:
+  host: nginx.local
+service:
+  type: ClusterIP
+  port: 80
