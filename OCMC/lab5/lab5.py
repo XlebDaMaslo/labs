@@ -1,21 +1,22 @@
 import random
+import numpy as np
 
 def generate_data(N):
   return ''.join(str(random.randint(0,1)) for _ in range(N))
 
 def calculate_crc(data, polynomial):
-    polynomial_len = len(polynomial)
-    data += '0' * (polynomial_len - 1) 
-
-    data_len = len(data)
+    polynomial_len = len(polynomial)  # Corrected typo
+    data_np = np.array([int(bit) for bit in data])
+    polynomial_np = np.array([int(bit) for bit in polynomial])
+    data_np = np.concatenate([data_np, np.zeros(polynomial_len - 1, dtype=int)])
+    data_len = len(data_np)
 
     for i in range(data_len - polynomial_len + 1):
-        if data[i] == '1':
-            for j in range(polynomial_len):
-                data = data[:i + j] + str(int(data[i + j]) ^ int(polynomial[j])) + data[i + j + 1:]
+        if data_np[i] == 1:
+            data_np[i:i + polynomial_len] = np.bitwise_xor(data_np[i:i + polynomial_len], polynomial_np)
 
-    crc = data[-polynomial_len + 1:]
-    return crc
+    crc = data_np[-(polynomial_len - 1):]
+    return "".join(map(str, crc))
 
 
 def calculate_crc_receiver(data_with_crc, polynomial):
