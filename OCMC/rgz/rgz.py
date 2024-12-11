@@ -3,14 +3,16 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from lab5.lab5 import calculate_crc
 from lab4.lab4 import gen_gold_seq
 
 import matplotlib.pyplot as plt
 import numpy as np
-from crc import Calculator, Crc8
+from crc import Calculator, Configuration
+
+STOP_WORD = "Stop"
 
 def ascii_encoder(text):
+    text += STOP_WORD
     encoded_bits = []
     for char in text:
         ascii_val = ord(char)
@@ -24,6 +26,10 @@ def ascii_decoder(bits):
         byte = bits[i:i+8]
         char_code = int("".join(map(str, byte)), 2)
         text += chr(char_code)
+
+    stop_index = text.find(STOP_WORD)
+    if stop_index != -1:
+        text = text[:stop_index]
     return text
 
 
@@ -86,126 +92,139 @@ def plot_spectrum(signal, fs, title):
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Values")
 
-## 1
-name = input("Enter your first and last name in Latin characters: ")
 
-## 2
-encoded_data = ascii_encoder(name)
-print("Encoded Data (ASCII):", encoded_data)
-visualize(encoded_data, "Encoded Data (ASCII)")
+if __name__ == "__main__":
+    ## 1
+    name = input("Enter your first and last name in Latin characters: ")
 
-## 3
-polynomial = '11011110'  # G=x7+x6+x4+x3+x2+x
-encoded_data_str = ''.join(map(str, encoded_data))
-crc = calculate_crc(encoded_data_str, polynomial)
-print("CRC на передатчике:", crc)
-crc_bits = [int(bit) for bit in crc]
+    ## 2
+    encoded_data = ascii_encoder(name)
+    print("Encoded Data (ASCII):", encoded_data)
+    visualize(encoded_data, "Encoded Data (ASCII)")
 
-## 4
-number_st = 10  # Номер по списку
-number_st2 = number_st + 7
-polynomial1_bin = "00011"
-polynomial2_bin = "01001"
+    ## 3
+    config = Configuration(
+        width=8,
+        polynomial=0xDE, # '11011110' G=x7+x6+x4+x3+x2+x
+        init_value=0x00,
+        final_xor_value=0x00,
+        reverse_input=False,
+        reverse_output=False,
+    )
 
-gold_sequence = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
+    crc_calculator = Calculator(config)
+    encoded_data_bytes = bytes(int(''.join(map(str, encoded_data[i:i + 8])), 2) for i in range(0, len(encoded_data), 8))
+    crc = crc_calculator.checksum(encoded_data_bytes)
+    crc_bits = list(map(int, bin(crc)[2:].zfill(8)))
 
-transmitted_sequence = gold_sequence + encoded_data + crc_bits
+    ## 4
+    number_st = 10  # Номер по списку
+    number_st2 = number_st + 7
+    polynomial1_bin = "00011"
+    polynomial2_bin = "01001"
 
-print("Gold Sequence:", gold_sequence)
-print("Transmitted Sequence:", transmitted_sequence)
-visualize(transmitted_sequence, "Transmitted Sequence (Gold + Data + CRC)")
+    gold_sequence = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
 
-## 5
-N = 5
-expanded_signal = expand_bits(transmitted_sequence, N)
+    transmitted_sequence = gold_sequence + encoded_data + crc_bits
 
-print("Expanded Signal:", expanded_signal)
-visualize(expanded_signal, f"Expanded Signal (N={N} samples/bit)")
+    print("Gold Sequence:", gold_sequence)
+    print("Transmitted Sequence:", transmitted_sequence)
+    visualize(transmitted_sequence, "Transmitted Sequence (Gold + Data + CRC)")
 
-## 6
-signal_length = 2 * N * len(transmitted_sequence)
-signal = np.zeros(signal_length)
+    ## 5
+    N = 5
+    expanded_signal = expand_bits(transmitted_sequence, N)
 
-shift = int(input(f"Введите сдвиг (от 0 до {N * len(transmitted_sequence)}): "))
-signal[shift:shift + len(expanded_signal)] = expanded_signal
+    print("Expanded Signal:", expanded_signal)
+    visualize(expanded_signal, f"Expanded Signal (N={N} samples/bit)")
 
-print("Signal:", signal)
-visualize(signal, f"Signal with Shift = {shift}")
+    ## 6
+    signal_length = 2 * N * len(transmitted_sequence)
+    signal = np.zeros(signal_length)
 
-## 7
-fs = 200
+    shift = int(input(f"Enter the offset (от 0 до {N * len(transmitted_sequence)}): "))
+    signal[shift:shift + len(expanded_signal)] = expanded_signal
 
-sigma = float(input("Введите значение стандартного отклонения шума (sigma): "))
-noise = np.random.normal(0, sigma, len(signal))
+    print("Signal:", signal)
+    visualize(signal, f"Signal with Shift = {shift}")
 
-received_signal = signal + noise
+    ## 7
+    fs = 200
 
-print("Received Signal (with noise):", received_signal)
-visualize(received_signal, f"Received Signal (with noise: sigma = {sigma})")
+    sigma = float(input("Enter the value of the noise standard deviation (sigma): "))
+    noise = np.random.normal(0, sigma, len(signal))
 
-## 8
-start_index = correlate(received_signal, gold_sequence, N)
-print("Start index of Gold sequence:", start_index)
+    received_signal = signal + noise
 
-signal_after_sync = received_signal[start_index:]
+    print("Received Signal (with noise):", received_signal)
+    visualize(received_signal, f"Received Signal (with noise: sigma = {sigma})")
 
-visualize(signal_after_sync, "Signal after Synchronization (everything before Gold removed)")
+    ## 8
+    start_index = correlate(received_signal, gold_sequence, N)
+    print("Start index of Gold sequence:", start_index)
 
-## 9
-decoded_bits = decode_signal(signal_after_sync, N)
-decoded_bits = decoded_bits[:len(gold_sequence) + len(encoded_data) + len(crc_bits)]
+    signal_after_sync = received_signal[start_index:]
 
-## 10
-decoded_bits_without_gold = decoded_bits[len(gold_sequence):] 
-print("Decoded bits (without gold): ", decoded_bits_without_gold)
+    visualize(signal_after_sync, "Signal after Synchronization (everything before Gold removed)")
 
-## 11
-received_data_bits = decoded_bits_without_gold[:-len(crc_bits)]
-received_crc_bits = decoded_bits_without_gold[-len(crc_bits):]
+    ## 9
+    decoded_bits = decode_signal(signal_after_sync, N)
+    decoded_bits = decoded_bits[:len(gold_sequence) + len(encoded_data) + len(crc_bits)]
 
-received_data_str = ''.join(map(str, received_data_bits))
-calculated_crc = calculate_crc(received_data_str, polynomial)
-print("Received CRC:", received_crc_bits)
-print("Calculated CRC:", calculated_crc)
+    ## 10
+    decoded_bits_without_gold = decoded_bits[len(gold_sequence):]
+    print("Decoded bits (without gold): ", decoded_bits_without_gold)
 
-## 12
-if calculated_crc == ''.join(map(str, received_crc_bits)):
-    print("CRC check: OK")
-
+    ## 11
     received_data_bits = decoded_bits_without_gold[:-len(crc_bits)]
-    decoded_text = ascii_decoder(received_data_bits)
-    print("Decoded Text:", decoded_text)
-else:
-    print("CRC check: Error. Cannot decode data.")
+    received_crc_bits = decoded_bits_without_gold[-len(crc_bits):]
 
-    received_data_bits = decoded_bits_without_gold[:-len(crc_bits)]
-    decoded_text = ascii_decoder(received_data_bits)
-    print("Decoded Text:", decoded_text)
+    received_data_bytes = bytes(int(''.join(map(str, received_data_bits[i:i + 8])), 2) for i in range(0, len(received_data_bits), 8))
+    calculated_crc = crc_calculator.checksum(received_data_bytes)
+    calculated_crc_bits = list(map(int, bin(calculated_crc)[2:].zfill(8)))
 
-## 13
-N_short = N // 2
-N_long = N * 2
+    print("Received CRC:", received_crc_bits)
+    print("Calculated CRC:", calculated_crc_bits)
 
-expanded_signal_short = expand_bits(transmitted_sequence, N_short)
-expanded_signal_long = expand_bits(transmitted_sequence, N_long)
+    ## 12
+    if calculated_crc == int(''.join(map(str, received_crc_bits)), 2):
+        print("CRC check: OK")
 
-signal_short = np.zeros(2 * N_short * len(transmitted_sequence))
-signal_short[shift:shift + len(expanded_signal_short)] = expanded_signal_short
-received_signal_short = signal_short + np.random.normal(0, sigma, len(signal_short))
+        received_data_bits = decoded_bits_without_gold[:-len(crc_bits)]
+        decoded_text = ascii_decoder(received_data_bits)
+        print("Decoded Text:", decoded_text)
 
-signal_long = np.zeros(2 * N_long * len(transmitted_sequence))
-signal_long[shift:shift + len(expanded_signal_long)] = expanded_signal_long
-received_signal_long = signal_long + np.random.normal(0, sigma, len(signal_long))
+    else:
+        print("CRC check: Error. Cannot decode data.")
 
-plot_spectrum(received_signal_long, fs, f"Received Signal Spectrum (N={N_long})")
-plot_spectrum(received_signal, fs, "Received Signal Spectrum (Noisy)")
-plot_spectrum(received_signal_short, fs, f"Received Signal Spectrum (N={N_short})")
-#plot_spectrum(signal, fs, "Transmitted Signal Spectrum")
-plt.xlim([-150, 150])
+        received_data_bits = decoded_bits_without_gold[:-len(crc_bits)]
+        decoded_text = ascii_decoder(received_data_bits)
+        print("Decoded Text:", decoded_text)
 
-plt.legend([f"Received (N={N_long})", "Received (N)", f"Received (N={N_short})"])
-plt.grid(True)
+    ## 13
+    N_short = N // 2
+    N_long = N * 2
 
-plt.show()
+    expanded_signal_short = expand_bits(transmitted_sequence, N_short)
+    expanded_signal_long = expand_bits(transmitted_sequence, N_long)
 
-# добавить стоп слово, профилирование( использовать штатную библиотеку и свою) проверив разницу 
+    signal_short = np.zeros(2 * N_short * len(transmitted_sequence))
+    signal_short[shift:shift + len(expanded_signal_short)] = expanded_signal_short
+    received_signal_short = signal_short + np.random.normal(0, sigma, len(signal_short))
+
+    signal_long = np.zeros(2 * N_long * len(transmitted_sequence))
+    signal_long[shift:shift + len(expanded_signal_long)] = expanded_signal_long
+    received_signal_long = signal_long + np.random.normal(0, sigma, len(signal_long))
+
+    plot_spectrum(received_signal_long, fs, f"Received Signal Spectrum (N={N_long})")
+    plot_spectrum(received_signal, fs, "Received Signal Spectrum (Noisy)")
+    plot_spectrum(received_signal_short, fs, f"Received Signal Spectrum (N={N_short})")
+    #plot_spectrum(signal, fs, "Transmitted Signal Spectrum")
+    plt.xlim([-150, 150])
+
+    plt.legend([f"Received (N={N_long})", "Received (N)", f"Received (N={N_short})"])
+    plt.grid(True)
+
+    plt.show()
+
+    # добавить стоп слово, профилирование( использовать штатную библиотеку и свою) проверив разницу 
