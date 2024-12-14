@@ -8,6 +8,7 @@ from lab4.lab4 import gen_gold_seq
 import matplotlib.pyplot as plt
 import numpy as np
 from crc import Calculator, Configuration
+import crc32c
 
 STOP_WORD = "Stop"
 
@@ -84,14 +85,14 @@ def decode_signal(signal, N, threshold=0.5):
     return decoded_bits
 
 def plot_spectrum(signal, fs, title):
-    frequencies = np.fft.fftfreq(len(signal), 1/fs)
-    spectrum = np.abs(np.fft.fft(signal))
+    signal_without_dc = signal - np.mean(signal)
+    frequencies = np.fft.fftfreq(len(signal_without_dc), 1/fs)
+    spectrum = np.abs(np.fft.fft(signal_without_dc))
 
     plt.plot(frequencies, spectrum)
     plt.title(title)
     plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Values")
-
+    plt.ylabel("Magnitude")
 
 if __name__ == "__main__":
     ## 1
@@ -103,19 +104,26 @@ if __name__ == "__main__":
     visualize(encoded_data, "Encoded Data (ASCII)")
 
     ## 3
-    config = Configuration(
-        width=8,
-        polynomial=0xDE, # '11011110' G=x7+x6+x4+x3+x2+x
-        init_value=0x00,
-        final_xor_value=0x00,
-        reverse_input=False,
-        reverse_output=False,
-    )
-
-    crc_calculator = Calculator(config)
     encoded_data_bytes = bytes(int(''.join(map(str, encoded_data[i:i + 8])), 2) for i in range(0, len(encoded_data), 8))
-    crc = crc_calculator.checksum(encoded_data_bytes)
-    crc_bits = list(map(int, bin(crc)[2:].zfill(8)))
+
+    # config = Configuration(
+    #     width=8,
+    #     polynomial=0xDE, # '11011110' G=x7+x6+x4+x3+x2+x
+    #     init_value=0x00,
+    #     final_xor_value=0x00,
+    #     reverse_input=False,
+    #     reverse_output=False,
+    # )
+
+    # crc_calculator = Calculator(config)
+    
+    # crc = crc_calculator.checksum(encoded_data_bytes)
+    # crc_bits = list(map(int, bin(crc)[2:].zfill(8)))
+
+    crc32c_checksum = crc32c.crc32c(encoded_data_bytes)
+    crc_bits = list(map(int, bin(crc32c_checksum)[2:].zfill(8)))
+    print("CRC32 на передатчике:", crc32c_checksum)
+
 
     ## 4
     number_st = 10  # Номер по списку
@@ -180,7 +188,7 @@ if __name__ == "__main__":
     received_crc_bits = decoded_bits_without_gold[-len(crc_bits):]
 
     received_data_bytes = bytes(int(''.join(map(str, received_data_bits[i:i + 8])), 2) for i in range(0, len(received_data_bits), 8))
-    calculated_crc = crc_calculator.checksum(received_data_bytes)
+    calculated_crc = crc32c.crc32c(received_data_bytes)
     calculated_crc_bits = list(map(int, bin(calculated_crc)[2:].zfill(8)))
 
     print("Received CRC:", received_crc_bits)
@@ -216,6 +224,7 @@ if __name__ == "__main__":
     signal_long[shift:shift + len(expanded_signal_long)] = expanded_signal_long
     received_signal_long = signal_long + np.random.normal(0, sigma, len(signal_long))
 
+    plt.figure()
     plot_spectrum(received_signal_long, fs, f"Received Signal Spectrum (N={N_long})")
     plot_spectrum(received_signal, fs, "Received Signal Spectrum (Noisy)")
     plot_spectrum(received_signal_short, fs, f"Received Signal Spectrum (N={N_short})")
