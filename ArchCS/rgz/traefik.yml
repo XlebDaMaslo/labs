@@ -1,0 +1,26 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+log:
+  level: DEBUG
+
+api:
+  dashboard: true
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    filename: /dynamic.yml
+    watch: true
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: ./traefik.crt
+        keyFile: ./traefik.key

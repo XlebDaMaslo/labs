@@ -1,0 +1,49 @@
+services:
+  traefik:
+    image: traefik:v2.9
+    command:
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./traefik.yml:/traefik.yml
+      - ./dynamic.yml:/dynamic.yml
+      - ./traefik.crt:/certs/traefik.crt
+      - ./traefik.key:/certs/traefik.key
+    labels:
+      - "traefik.enable=true"
+    networks:
+      - jenkins-network
+
+  jenkins:
+    build:
+      context: ./jenkins
+    image: custom-jenkins
+    user: "root"
+    restart: unless-stopped
+    volumes:
+      - ./jenkins/data:/var/jenkins_home
+      - ./jenkins/config:/var/jenkins_home/config
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.example.com`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+    networks:
+      - jenkins-network
+
+networks:
+  jenkins-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
