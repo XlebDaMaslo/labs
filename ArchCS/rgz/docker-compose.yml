@@ -15,8 +15,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - ./traefik.yml:/traefik.yml
       - ./dynamic.yml:/dynamic.yml
-      - ./traefik.crt:/traefik.crt
-      - ./traefik.key:/traefik.key
+      - ./certs/traefik.crt:/certs/traefik.crt
+      - ./certs/traefik.key:/certs/traefik.key
     labels:
       - "traefik.enable=true"
     networks:
