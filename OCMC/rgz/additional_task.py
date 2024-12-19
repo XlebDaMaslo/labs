@@ -143,11 +143,12 @@ if __name__ == "__main__":
     num_trials = 10
     
     sigma_values = np.linspace(0.01, 1, 20)
-    crc_error_probabilities = {group_size: [] for group_size in group_sizes}
+    ber_values = {group_size: [] for group_size in group_sizes}
 
     for group_size in group_sizes:
         for current_sigma in sigma_values:
-            error_count = 0
+            error_bits_count = 0
+            total_bits_count = 0
             for _ in range(num_trials): # Повторяем симуляции для каждого значения sigma
                 # Group encoding
                 grouped_signal = grouped_encoder(transmitted_sequence, group_size)
@@ -169,28 +170,25 @@ if __name__ == "__main__":
 
                 decoded_bits = grouped_decoder(decoded_grouped_signal,group_size)
                 decoded_bits = decoded_bits[:len(gold_sequence) + len(encoded_data) + len(crc_bits)]
-
-                received_bits_without_gold = decoded_bits[len(gold_sequence):]
-                received_data_bits = received_bits_without_gold[:-len(crc_bits)]
-                received_crc_bits = received_bits_without_gold[-len(crc_bits):]
                 
-                received_data_bytes = bytes(int(''.join(map(str, received_data_bits[i:i + 8])), 2) for i in range(0, len(received_data_bits), 8))
-                calculated_crc = crc32c.crc32c(received_data_bytes)
-                calculated_crc_bits = list(map(int, bin(calculated_crc)[2:].zfill(8)))
+                transmitted_bits = transmitted_sequence[:len(decoded_bits)]
 
-                crc_error = calculated_crc != int(''.join(map(str, received_crc_bits)), 2)
-                if crc_error:
-                  error_count+=1
-            crc_error_probabilities[group_size].append(error_count/num_trials)
-            print(crc_error_probabilities)
+                for i in range(len(transmitted_bits)):
+                  if transmitted_bits[i] != decoded_bits[i]:
+                    error_bits_count+=1
+                  total_bits_count+=1
+
+
+            ber_values[group_size].append(error_bits_count/total_bits_count)
+            print(ber_values)
         visualize(grouped_signal, f"Group size={group_size}")
     
     plt.figure(figsize=(10, 6))
-    for group_size, error_probs in crc_error_probabilities.items():
+    for group_size, error_probs in ber_values.items():
         plt.plot(sigma_values, error_probs, label=f"Group Size: {group_size}")
     
     plt.xlabel("Sigma")
-    plt.ylabel("CRC Error Probability")
+    plt.ylabel("Bit Error Rate")
     plt.legend()
     plt.grid(True)
 
