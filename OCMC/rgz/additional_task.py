@@ -1,11 +1,14 @@
 import sys
 import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from lab4.lab4 import gen_gold_seq
+
 import matplotlib.pyplot as plt
 import numpy as np
 from crc import Calculator, Configuration
 import crc32c
-from lab4.lab4 import gen_gold_seq
 
 STOP_WORD = "Stop"
 
@@ -37,7 +40,6 @@ def expand_bits(bits, N):
     return expanded_signal
 
 def calculate_ber(original_bits, received_bits):
-    # Убедитесь, что сравниваете правильные данные
     errors = np.sum(np.array(original_bits) != np.array(received_bits))
     return errors / len(original_bits)
 
@@ -52,14 +54,11 @@ def decode_signal(signal, N, threshold=0.5):
     return decoded_bits
 
 def simulate_transmission(name, N, sigma, gold_sequence, crc_bits):
-    # Кодирование имени в битовую последовательность
     encoded_data = ascii_encoder(name)
     transmitted_sequence = gold_sequence + encoded_data + crc_bits
 
-    # Расширение бит для N-битного кодирования
     expanded_signal = expand_bits(transmitted_sequence, N)
 
-    # Создание шума и передача сигнала
     signal_length = 2 * N * len(transmitted_sequence)
     signal = np.zeros(signal_length)
     shift = 0
@@ -67,7 +66,6 @@ def simulate_transmission(name, N, sigma, gold_sequence, crc_bits):
     noise = np.random.normal(0, sigma, len(signal))
     received_signal = signal + noise
 
-    # Декодирование
     decoded_bits = decode_signal(received_signal, N)
     decoded_bits = decoded_bits[:len(gold_sequence) + len(encoded_data) + len(crc_bits)]
 
@@ -93,32 +91,26 @@ def plot_signal_with_noise(signal, received_signal, N, sigma):
     plt.legend()
 
 if __name__ == "__main__":
-    # Ввод имени пользователя
-    name = input("Enter your first and last name in Latin characters: ")
+    name = "Test text"
 
-    # CRC-32
     encoded_data_bytes = bytes(int(''.join(map(str, ascii_encoder(name)[i:i + 8])), 2) for i in range(0, len(ascii_encoder(name)), 8))
     crc32c_checksum = crc32c.crc32c(encoded_data_bytes)
     crc_bits = list(map(int, bin(crc32c_checksum)[2:].zfill(8)))
 
-    # Генерация Gold sequence
     number_st = 10
     number_st2 = number_st + 7
     polynomial1_bin = "00011"
     polynomial2_bin = "01001"
     gold_sequence = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
 
-    # Диапазон значений sigma
-    sigma_values = np.linspace(0.1, 1, 10)  # Значения sigma от 0.1 до 2
+    sigma_values = np.linspace(0.1, 1, 10)
 
-    # Массивы для BER для разных способов кодирования
     ber_values_n1 = []
     ber_values_n2 = []
     ber_values_n4 = []
     
-    num_iterations = 5 # Количество итераций для усреднения BER
+    num_iterations = 5
 
-    # Для каждого значения sigma измеряем BER для N=1, N=2 и N=4
     for sigma in sigma_values:
         ber_n1_sum = 0
         ber_n2_sum = 0
@@ -140,14 +132,10 @@ if __name__ == "__main__":
         ber_values_n2.append(ber_n2_sum / num_iterations)
         ber_values_n4.append(ber_n4_sum / num_iterations)
 
-
-    # Построение графиков BER
     plot_ber(sigma_values, ber_values_n4, 4)
     plot_ber(sigma_values, ber_values_n1, 1)
     plot_ber(sigma_values, ber_values_n2, 2)
     
-
-    # Параметры для графиков сигнала с шумом
     sigma_noise = 0.4
 
     # Для N=1
@@ -162,5 +150,4 @@ if __name__ == "__main__":
     _, _, signal_n4, received_signal_n4 = simulate_transmission(name, 4, sigma_noise, gold_sequence, crc_bits)
     plot_signal_with_noise(signal_n4, received_signal_n4, 4, sigma_noise)
 
-    # Отображение графиков
     plt.show()
