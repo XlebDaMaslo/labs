@@ -1,13 +1,12 @@
 import sys
 import os
-
+import math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from lab4.lab4 import gen_gold_seq
 
 import matplotlib.pyplot as plt
 import numpy as np
-from crc import Calculator, Configuration
 import crc32c
 
 STOP_WORD = "Stop"
@@ -25,129 +24,145 @@ def ascii_decoder(bits):
     text = ""
     for i in range(0, len(bits), 8):
         byte = bits[i:i+8]
-        char_code = int("".join(map(str, byte)), 2)
-        text += chr(char_code)
-
+        if len(byte) == 8:  # Ensure full byte before decoding
+            char_code = int("".join(map(str, byte)), 2)
+            text += chr(char_code)
     stop_index = text.find(STOP_WORD)
     if stop_index != -1:
         text = text[:stop_index]
     return text
 
-def expand_bits(bits, N):
-    expanded_signal = []
-    for bit in bits:
-        expanded_signal.extend([bit] * N)
-    return expanded_signal
 
-def calculate_ber(original_bits, received_bits):
-    errors = np.sum(np.array(original_bits) != np.array(received_bits))
-    return errors / len(original_bits)
+def phase_shift_keying(bits, N, M): # M - количество фаз
+    phase_signal = []
+    for i in range(0, len(bits), N):
+        bit_group = bits[i:i+N]
+        if len(bit_group) == N:  # Ensure full group before modulation
+            val = int("".join(map(str, bit_group)), 2)
+            phase = 2*np.pi * val / M  # Calculate phase based on value of bit group
+            phase_signal.extend([phase] * N)
+        elif len(bit_group) < N:  # Handle last incomplete group
+            phase = 0
+            phase_signal.extend([phase] * len(bit_group))
+    return phase_signal
 
-def decode_signal(signal, N, threshold=0.5):
+def correlation(a, b):
+    result = 0
+    for i in range(min(len(a), len(b))):  # Use minimum length for safety
+        result += a[i] * b[i]
+    return result
+
+def normalized_correlation(a, b):
+    sum_a = sum(x*x for x in a)
+    sum_b = sum(x*x for x in b)
+
+    if sum_a == 0 or sum_b == 0:
+        return 0  # Handle potential divide by zero
+
+    return correlation(a, b) / ((sum_a * sum_b) ** (1/2))
+
+
+def correlate(received_signal, gold_sequence, N, M):
+    gold_expanded = phase_shift_keying(gold_sequence, N, M)
+    shift = 0
+    max_corr = -1 # Initialize with a negative value to ensure proper comparison
+    for i in range(len(received_signal) - len(gold_expanded) + 1):
+        current_corr = normalized_correlation(received_signal[i : i + len(gold_expanded)], gold_expanded)
+
+        if current_corr > max_corr:
+            max_corr = current_corr
+            shift = i
+
+    return shift
+
+
+def decode_signal(signal, N, M, threshold=0.0): # M - количество фаз
     decoded_bits = []
     for i in range(0, len(signal), N):
-        bit_chunk = signal[i:i + N]
-        if np.mean(bit_chunk) >= threshold:
-            decoded_bits.append(1)
-        else:
-            decoded_bits.append(0)
+        if i + N <= len(signal):  # Check for valid slice
+            phase_values = signal[i:i + N]
+            avg_phase = np.mean(phase_values)
+            
+            if M == 2: # For BPSK
+               decoded_bits.append(0 if abs(avg_phase - 0) < abs(avg_phase - np.pi) else 1)
+            else:
+                val = int(round(avg_phase / (2*np.pi) * M)) % M
+                binary = bin(val)[2:].zfill(N)
+                decoded_bits.extend(map(int, binary))
     return decoded_bits
 
-def simulate_transmission(name, N, sigma, gold_sequence, crc_bits):
-    encoded_data = ascii_encoder(name)
-    transmitted_sequence = gold_sequence + encoded_data + crc_bits
 
-    expanded_signal = expand_bits(transmitted_sequence, N)
-
-    signal_length = 2 * N * len(transmitted_sequence)
-    signal = np.zeros(signal_length)
-    shift = 0
-    signal[shift:shift + len(expanded_signal)] = expanded_signal
-    noise = np.random.normal(0, sigma, len(signal))
-    received_signal = signal + noise
-
-    decoded_bits = decode_signal(received_signal, N)
-    decoded_bits = decoded_bits[:len(gold_sequence) + len(encoded_data) + len(crc_bits)]
-
-    received_data_bits = decoded_bits[len(gold_sequence):-len(crc_bits)]
-    return encoded_data, received_data_bits, signal, received_signal
-
-def plot_ber(sigma_values, ber_values, N):
-    plt.plot(sigma_values, ber_values, label=f'Group Size: {N}')
-    plt.xlabel("Sigma")
-    plt.ylabel("Bit Error Rate")
-    plt.grid(True)
-    plt.legend()
-
-
-def plot_signal_with_noise(signal, received_signal, N, sigma):
-    plt.figure(figsize=(10, 4))
-    plt.step(range(len(signal)), signal, where='post', label='Transmitted Signal')
-    plt.step(range(len(received_signal)), received_signal, where='post', label=f'Received Signal with noise (σ = {sigma})')
-    plt.title(f"Signal and Received Signal with Noise for N={N}")
-    plt.xlabel("Bit Index")
-    plt.ylabel("Signal Value")
-    plt.grid(True)
-    plt.legend()
+def calculate_ber(transmitted_bits, received_bits):
+    min_len = min(len(transmitted_bits), len(received_bits))
+    errors = sum(t != r for t, r in zip(transmitted_bits[:min_len], received_bits[:min_len]))
+    return errors / min_len if min_len > 0 else 0
 
 if __name__ == "__main__":
-    name = "Test text"
+    ## 1
+    name = "Testtext!!!1234567890"
 
-    encoded_data_bytes = bytes(int(''.join(map(str, ascii_encoder(name)[i:i + 8])), 2) for i in range(0, len(ascii_encoder(name)), 8))
+    ## 2
+    encoded_data = ascii_encoder(name)
+
+    ## 3
+    encoded_data_bytes = bytes(int(''.join(map(str, encoded_data[i:i + 8])), 2) for i in range(0, len(encoded_data), 8))
+
     crc32c_checksum = crc32c.crc32c(encoded_data_bytes)
     crc_bits = list(map(int, bin(crc32c_checksum)[2:].zfill(8)))
 
-    number_st = 10
+    ## 4
+    number_st = 10  # Номер по списку
     number_st2 = number_st + 7
     polynomial1_bin = "00011"
     polynomial2_bin = "01001"
+
     gold_sequence = gen_gold_seq(number_st, number_st2, polynomial1_bin, polynomial2_bin)
 
-    sigma_values = np.linspace(0.1, 1, 10)
+    transmitted_sequence = gold_sequence + encoded_data + crc_bits
 
-    ber_values_n1 = []
-    ber_values_n2 = []
-    ber_values_n4 = []
+    Ns = [1, 2, 4]
+    snr_range = np.arange(-10, 100, 1)
+
+    ber_results = {N: [] for N in Ns}
+
+    for N in Ns:
+       
+        M = 2**N
+        for snr_db in snr_range:
+            snr_linear = 10 ** (snr_db / 10)
+
+            phase_signal = phase_shift_keying(transmitted_sequence, N, M)
+            signal_length = len(phase_signal)
+
+            shift = 0
+            signal = np.zeros(signal_length)
+            signal[shift:shift + len(phase_signal)] = phase_signal
+            signal_power = np.mean(signal**2)
+            noise_power = signal_power / snr_linear
+            sigma = np.sqrt(noise_power)
+
+
+            noise = np.random.normal(0, sigma, len(signal))
+            received_signal = signal + noise
+            
+            start_index = correlate(received_signal, gold_sequence, N, M)
+
+            signal_after_sync = received_signal[start_index:]
+
+            decoded_bits = decode_signal(signal_after_sync, N, M)
+            decoded_bits = decoded_bits[:len(transmitted_sequence)]
+
+            
+            ber = calculate_ber(transmitted_sequence, decoded_bits)
+            ber_results[N].append(ber)
+
+    plt.figure(figsize=(10, 6))
+    for N in Ns:
+        plt.plot(snr_range, ber_results[N], label=f'Group Siza: {N}')
     
-    num_iterations = 5
-
-    for sigma in sigma_values:
-        ber_n1_sum = 0
-        ber_n2_sum = 0
-        ber_n4_sum = 0
-        for _ in range(num_iterations):
-            # Для N=1
-            encoded_data, received_data, _, _ = simulate_transmission(name, 1, sigma, gold_sequence, crc_bits)
-            ber_n1_sum += calculate_ber(encoded_data, received_data)
-
-            # Для N=2
-            encoded_data, received_data, _, _ = simulate_transmission(name, 2, sigma, gold_sequence, crc_bits)
-            ber_n2_sum += calculate_ber(encoded_data, received_data)
-
-            # Для N=4
-            encoded_data, received_data, _, _ = simulate_transmission(name, 4, sigma, gold_sequence, crc_bits)
-            ber_n4_sum += calculate_ber(encoded_data, received_data)
-
-        ber_values_n1.append(ber_n1_sum / num_iterations)
-        ber_values_n2.append(ber_n2_sum / num_iterations)
-        ber_values_n4.append(ber_n4_sum / num_iterations)
-
-    plot_ber(sigma_values, ber_values_n4, 4)
-    plot_ber(sigma_values, ber_values_n1, 1)
-    plot_ber(sigma_values, ber_values_n2, 2)
-    
-    sigma_noise = 0.4
-
-    # Для N=1
-    _, _, signal_n1, received_signal_n1 = simulate_transmission(name, 1, sigma_noise, gold_sequence, crc_bits)
-    plot_signal_with_noise(signal_n1, received_signal_n1, 1, sigma_noise)
-
-    # Для N=2
-    _, _, signal_n2, received_signal_n2 = simulate_transmission(name, 2, sigma_noise, gold_sequence, crc_bits)
-    plot_signal_with_noise(signal_n2, received_signal_n2, 2, sigma_noise)
-
-    # Для N=4
-    _, _, signal_n4, received_signal_n4 = simulate_transmission(name, 4, sigma_noise, gold_sequence, crc_bits)
-    plot_signal_with_noise(signal_n4, received_signal_n4, 4, sigma_noise)
-
+    plt.xlabel('Signal-to-Noise Ratio')
+    plt.ylabel('Bit Error Rate')
+    plt.yscale('log')
+    plt.grid(True)
+    plt.legend()
     plt.show()
