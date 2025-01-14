@@ -12,15 +12,16 @@ def psk_modulate(bits, m, samples_per_bit):
     
     while bits:
       if m == 2: # 2PSK
-         symbols.append(symbol_map[bits.pop(0)])
+        index = bits.pop(0)
+        symbols.append(symbol_map[index]* (index + 1))
       elif m == 4 and len(bits) >= 2: # 4PSK
           bits_pair = bits.pop(0), bits.pop(0)
           index = bits_pair[0] * 2 + bits_pair[1]
-          symbols.append(symbol_map[index])
+          symbols.append(symbol_map[index] * (index + 1))
       elif m == 16 and len(bits) >= 4: # 16PSK
           bits_quartet = [bits.pop(0) for _ in range(4)]
           index = (bits_quartet[0] * 8 + bits_quartet[1] * 4 + bits_quartet[2] * 2 + bits_quartet[3])
-          symbols.append(symbol_map[index])
+          symbols.append(symbol_map[index] * (index + 1))
       else:
           break
       
@@ -61,8 +62,8 @@ def calculate_ber(original_bits, demodulated_bits):
 def plot_modulated_signal(signal, title, samples_per_bit):
     plt.figure(figsize=(10, 4))
     time = np.arange(len(signal)) / samples_per_bit
-    plt.plot(time, signal.real)
-    #plt.plot(time, signal.imag)
+    # Рисуем модуль комплексного сигнала
+    plt.plot(time, np.abs(signal))
     plt.xlabel("Time")
     plt.ylabel("Amplitude")
     plt.title(title)
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     for i, m in enumerate(modulations):
         original_bits = generate_bit_sequence(num_bits)
         modulated_signal = psk_modulate(original_bits.copy(), m, samples_per_bit)
-        plot_modulated_signal(modulated_signal, f"{m}-PSK Modulated Signal", samples_per_bit)
+        plot_modulated_signal(modulated_signal, f"{m} Modulated Signal", samples_per_bit)
 
         for sigma in sigmas:
             noisy_signal = add_noise(modulated_signal, sigma)
@@ -114,7 +115,7 @@ if __name__ == "__main__":
             ber_results[m].append(ber)
     
     for m in modulations:
-      plot_ber_vs_sigma(sigmas, ber_results[m], "BER vs Sigma", ax, f"{m}-PSK")
+      plot_ber_vs_sigma(sigmas, ber_results[m], "BER vs Sigma", ax, f"{m}")
 
     plt.tight_layout()
     plt.show()
