@@ -41,11 +41,16 @@ for i, (m_x, s1) in enumerate(parameters):
 for m_x, s1 in parameters:
     xn = np.random.normal(m_x, s1, len(t))
     
-    m_x_estimated = np.mean(xn)
-    sigma_squared_estimated = np.var(xn)
+    bin_width = 0.1
+    bins = np.arange(m_x - 4*s1, m_x + 4*s1 + bin_width, bin_width)
+    hist, bin_edges = np.histogram(xn, bins=bins, density=True)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    
+    m_x_estimated = np.sum(bin_centers * hist) * bin_width
+    sigma_squared_estimated = np.sum(bin_centers**2 * hist) * bin_width - m_x_estimated**2
     
     print(f"Параметры моделирования: m_x={m_x}, σ²={s1**2}")
-    print(f"Оцененные параметры: m_x={m_x_estimated:.4f}, σ²={sigma_squared_estimated:.4f}")
+    print(f"Оцененные параметры через эмпирическую плотность: m_x={m_x_estimated:.4f}, σ²={sigma_squared_estimated:.4f}")
     print()
 
 plt.tight_layout()
