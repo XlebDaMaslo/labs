@@ -38,5 +38,15 @@ for i, (m_x, s1) in enumerate(parameters):
     axs[row, col].legend()
     axs[row, col].grid(True)
 
+for m_x, s1 in parameters:
+    xn = np.random.normal(m_x, s1, len(t))
+    
+    m_x_estimated = np.mean(xn)
+    sigma_squared_estimated = np.var(xn)
+    
+    print(f"Параметры моделирования: m_x={m_x}, σ²={s1**2}")
+    print(f"Оцененные параметры: m_x={m_x_estimated:.4f}, σ²={sigma_squared_estimated:.4f}")
+    print()
+
 plt.tight_layout()
 plt.show()
