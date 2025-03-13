@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 
 parameters = [
     (0, 1),
-    (0, np.sqrt(3)),
-    (0, np.sqrt(0.2)),
+    (0, 3),
+    (0, 0.2),
     (-1, 1)
 ]
 
