@@ -30,7 +30,7 @@ int main() {
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = 0; // Автоматический выбор порта
+    servaddr.sin_port = 11111; // Автоматический выбор порта
 
     if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
         perror("Ошибка привязки сокета");
@@ -97,7 +97,9 @@ int main() {
 
         // Запись данных в файл
         fwrite(data, 1, data_size, fp);
-        fwrite("\n", 1, 1, fp); // Перенос строки
+        // fprintf(fp, "%s", data);
+        fwrite("\n\n", 1, 2, fp); // Перенос строки
+        fflush(fp);
     }
 
     fclose(fp);

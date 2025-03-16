@@ -6,9 +6,8 @@
 #include <sys/time.h>
 
 #define MAX_PACKET_SIZE 1000
-#define TIMEOUT_SEC 5
+#define TIMEOUT_SEC 1
 
-// Простая функция CRC32 (должна совпадать с серверной)
 unsigned int crc32(const char *data, size_t len) {
     unsigned int crc = 0xFFFFFFFF;
     for (size_t i = 0; i < len; i++) {
