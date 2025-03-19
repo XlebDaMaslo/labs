@@ -5,7 +5,7 @@ decoded_text = decoder(bits);
 disp(decoded_text);
 
 %% 2
-input_bits = [0 1 0 1 1 0];
+input_bits = [0 1 0 1 1 0 0 0 1 1];
 
 encoded_bits = conv_encoder(input_bits);
 %disp(encoded_bits);
@@ -39,3 +39,11 @@ disp(symbols);
 received_bits = qpsk_demodulate(symbols);
 disp('Демодулированные биты:');
 disp(received_bits);
+
+%% 5
+delta_rs = 6; % Шаг опорных поднесущих
+c = 1/4; % Коэффициент для нулевых поднесущих
+
+ofdm_symbols = ofdm_modulate(symbols, delta_rs, c);
+disp('OFDM Модулированные символы:');
+disp(ofdm_symbols);
