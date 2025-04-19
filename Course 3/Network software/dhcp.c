@@ -3,316 +3,287 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+// #include <netdb.h>           // Для gethostbyname и struct hostent
+#include <errno.h>
+#include <time.h>
 
-// Типы сообщений
-#define DHCPDISCOVER 1 // Клиент ищет сервер
-#define DHCPOFFER 2    // Сервер предлагает IP
-#define DHCPREQUEST 3  // Клиент запрашивает IP
-#define DHCPACK 5      // Сервер подтверждает выдачу IP
+#define DHCP_SERVER_PORT 67         // Порт сервера DHCP (67)
+#define DHCP_CLIENT_PORT 68         // Порт клиента DHCP (68)
+#define MAX_LEASES 256              // Максимальное число записей аренды
+#define MAX_ADDR   256              // Максимальное число IP-адресов
+#define BUF_SIZE   1024             // Размер буфера для приема/передачи
 
-#define DHCPDECLINE  4  // Клиент отказывается от предложенного IP
-#define DHCPNAK      6  // Сервер отклоняет запрос клиента
-#define DHCPRELEASE  7  // Клиент освобождает IP
-#define DHCPINFORM   8  // Клиент запрашивает информацию
-
-// Структура пула IP-адресов
-typedef struct ip_pool {
-    uint32_t ip;        // IP-адрес в сетевом порядке
-    int is_assigned;    // 1 - занят, 0 - свободен
-    uint8_t chaddr[16]; // MAC-адрес клиента
-} ip_pool_t;
-
-// Структура сообщения
-typedef struct dhcp_message {
-    uint8_t op;        // Тип сообщения: BOOTREQUEST (1 - запрос от клиента к серверу) или BOOTREPLY (2 - ответ от сервера к клиенту)
-    uint8_t htype;     // Тип аппаратного адреса. Для MAC-адреса Ethernet 10 Мбит/с это поле принимает значение 1.
-    uint8_t hlen;      // Длина аппаратного адреса. Для MAC-адреса Ethernet — 6.
-    uint8_t hops;      // Количество промежуточных маршрутизаторов
-    uint32_t xid;      // Уникальный идентификатор транзакции
-    uint16_t secs;     // Время в секундах с момента начала процесса получения адреса.
-    uint16_t flags;    // Поле для флагов — специальных параметров протокола DHCP.
-    uint32_t ciaddr;   // IP-адрес клиента. Заполняется только в том случае, если клиент уже имеет собственный IP-адрес и способен отвечать на запросы ARP (это возможно, если клиент выполняет процедуру обновления адреса по истечении срока аренды).
-    uint32_t yiaddr;   // Новый IP-адрес клиента, предложенный сервером.
-    uint32_t siaddr;   // IP-адрес сервера. Возвращается в предложении DHCP.
-    uint32_t giaddr;   // IP-адрес агента ретрансляции, если таковой участвовал в процессе доставки сообщения DHCP до сервера.
-    uint8_t chaddr[16]; // Аппаратный адрес (обычно MAC-адрес) клиента.
-    uint8_t sname[64];  // Необязательное имя сервера в виде нуль-терминированной строки.
-    uint8_t file[128];  // Необязательное имя файла на сервере, используемое бездисковыми рабочими станциями при удалённой загрузке.
-    uint8_t options[312]; // Поле опций DHCP
-} dhcp_message_t;
-
-// Пул IP-адресов (3 адреса для примера)
-ip_pool_t ip_pool[] = {
-    { .ip = 0, .is_assigned = 0, .chaddr = {0} },
-    { .ip = 0, .is_assigned = 0, .chaddr = {0} },
-    { .ip = 0, .is_assigned = 0, .chaddr = {0} }
+// DHCP-пакет (упрощенная структура)
+struct dhcp_packet {
+    uint8_t  op;
+    uint8_t  htype;
+    uint8_t  hlen;
+    uint8_t  hops;
+    uint32_t xid;
+    uint16_t secs;
+    uint16_t flags;
+    uint32_t ciaddr;
+    uint32_t yiaddr;
+    uint32_t siaddr;
+    uint32_t giaddr;
+    uint8_t  chaddr[16];
+    uint8_t  sname[64];
+    uint8_t  file[128];
+    uint8_t  options[312];  // Опции DHCP (magic cookie + переменные опции)
 };
-const int pool_size = sizeof(ip_pool) / sizeof(ip_pool[0]);
 
-// Подготовка пула IP
-void init_ip_pool() {
-    ip_pool[0].ip = inet_addr("192.168.1.100");
-    ip_pool[1].ip = inet_addr("192.168.1.101");
-    ip_pool[2].ip = inet_addr("192.168.1.102");
-}
+// Запись аренды: MAC-адрес клиента и назначенный IP
+struct lease {
+    uint8_t  mac[16];
+    uint32_t ip;
+    int      used;
+};
 
-// Поиск свободного IP
-uint32_t get_free_ip() {
-    for (int i = 0; i < pool_size; i++) {
-        if (!ip_pool[i].is_assigned) {
-            return ip_pool[i].ip;
+static struct lease leases[MAX_LEASES];       // Массив аренды
+static uint32_t addr_list[MAX_ADDR];          // Список доступных IP-адресов
+static int      addr_count = 0;               // Число адресов
+static uint32_t server_ip  = 0;               // IP-адрес сервера (для поля siaddr)
+
+// Загрузка списка адресов из файла
+int load_addr_list(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        perror("Ошибка открытия файла адресов");
+        return -1;
+    }
+    char line[100];
+    while (fgets(line, sizeof(line), f) && addr_count < MAX_ADDR) {
+        if (line[0]=='#' || strlen(line)<7) continue;
+        struct in_addr a;
+        if (inet_aton(line, &a)) {
+            addr_list[addr_count++] = a.s_addr;
         }
     }
-    return 0; // Нет свободных адресов
-}
-
-// Проверка доступности IP
-int is_ip_available(uint32_t ip) {
-    for (int i = 0; i < pool_size; i++) {
-        if (ip_pool[i].ip == ip && !ip_pool[i].is_assigned) {
-            return 1;
-        }
-    }
+    fclose(f);
     return 0;
 }
 
-// Выделение IP клиенту
-void assign_ip(uint32_t ip, uint8_t *chaddr) {
-    for (int i = 0; i < pool_size; i++) {
-        if (ip_pool[i].ip == ip) {
-            ip_pool[i].is_assigned = 1;
-            memcpy(ip_pool[i].chaddr, chaddr, 16);
-            break;
+// Поиск уже существующей аренды по MAC-адресу
+int find_lease(uint8_t *mac) {
+    for (int i = 0; i < addr_count; i++) {
+        if (leases[i].used && memcmp(leases[i].mac, mac, 16) == 0) {
+            return i;
         }
     }
+    return -1;
 }
 
-// Освобождение IP
-void release_ip(uint32_t ip) {
-    for (int i = 0; i < pool_size; i++) {
-        if (ip_pool[i].ip == ip) {
-            ip_pool[i].is_assigned = 0;
-            memset(ip_pool[i].chaddr, 0, 16);
-            break;
+// Назначение IP-адреса новому клиенту или возврат существующего
+int allocate_ip(uint8_t *mac) {
+    int idx = find_lease(mac);
+    if (idx >= 0) {
+        return idx;  // Уже было выделено
+    }
+    // Найти свободный адрес
+    for (int i = 0; i < addr_count; i++) {
+        if (!leases[i].used) {
+            leases[i].used = 1;
+            memcpy(leases[i].mac, mac, 16);
+            leases[i].ip = addr_list[i];
+            return i;
         }
     }
+    return -1; // Нет свободных адресов
 }
 
-// Инициализация сообщения
-void init_dhcp_message(dhcp_message_t *msg) {
-    memset(msg, 0, sizeof(dhcp_message_t));
-    msg->htype = 1; // Тип аппаратного адреса. Для MAC-адреса Ethernet 10 Мбит/с это поле принимает значение 1.
-    msg->hlen = 6;  // Длина аппаратного адреса. Для MAC-адреса Ethernet — 6.
-    // Установка "волшебного числа"
-    msg->options[0] = 99;
-    msg->options[1] = 130;
-    msg->options[2] = 83;
-    msg->options[3] = 99;
-}
-
-// Получение типа сообщения из опций
-uint8_t get_message_type(dhcp_message_t *msg) {
-    int i = 4; // Начало после "волшебного числа"
-    while (i < 312) {
-        if (msg->options[i] == 53) { // Проверка кода опции типа сообщения
-            return msg->options[i + 2]; // Значение типа сообщения
+// Получить опцию DHCP из пакета
+int get_dhcp_option(uint8_t *options, uint8_t code, uint8_t *len, uint8_t **data) {
+    int i = 4; // пропустить magic cookie
+    while (i < sizeof(((struct dhcp_packet*)0)->options)) {
+        if (options[i] == 255) break; // End
+        uint8_t c = options[i++];
+        uint8_t l = options[i++];
+        if (c == code) {
+            *len = l;
+            *data = &options[i];
+            return 0;
         }
-        i += 2 + msg->options[i + 1]; // Сдвиг указателя на следующее свободное место в options
+        i += l;
     }
-    return 0;
+    return -1;
 }
 
-// Установка типа сообщения в опциях
-void set_message_type(dhcp_message_t *msg, uint8_t type) {
-    int i = 4; // Начало после волшебного числа
-    msg->options[i] = 53; // Код опции типа сообщения
-    msg->options[i + 1] = 1; // Длина значения опции
-    msg->options[i + 2] = type; // Значение типа сообщения
-    msg->options[i + 3] = 255; // Конец опций
+// Добавить опцию DHCP в пакет
+void add_dhcp_option(uint8_t *options, int *idx, uint8_t code, uint8_t len, uint8_t *data) {
+    options[(*idx)++] = code;
+    options[(*idx)++] = len;
+    memcpy(&options[*idx], data, len);
+    *idx += len;
 }
 
-// Установка идентификатора сервера в опциях
-void set_server_identifier(dhcp_message_t *msg, uint32_t server_ip) {
-    int i = 7; // После опции типа сообщения
-    msg->options[i] = 54; // Код опции идентификатора сервера
-    msg->options[i + 1] = 4; // Длина значения опции
-    memcpy(&msg->options[i + 2], &server_ip, 4); // Копирование данных опции (IP сервера)
-    msg->options[i + 6] = 255; // Конец опций
+// Обработчик DHCPDISCOVER: формирует и отправляет DHCPOFFER
+void handle_discover(int sock, struct dhcp_packet *req) {
+    int lease_idx = allocate_ip(req->chaddr);
+    if (lease_idx < 0) {
+        printf("Нет свободных IP-адресов для клиента\n");
+        return;
+    }
+    struct dhcp_packet offer;
+    memset(&offer, 0, sizeof(offer));
+    offer.op = 2; // BOOTREPLY
+    offer.htype = req->htype;
+    offer.hlen   = req->hlen;
+    offer.xid    = req->xid;
+    offer.yiaddr = leases[lease_idx].ip;
+    offer.siaddr = server_ip;
+    memcpy(offer.chaddr, req->chaddr, 16);
+    // Magic cookie
+    uint8_t *opt = offer.options;
+    opt[0]=99; opt[1]=130; opt[2]=83; opt[3]=99;
+    int idx = 4;
+    // Опция DHCP Message Type = DHCPOFFER (2)
+    uint8_t msg_type = 2;
+    add_dhcp_option(opt, &idx, 53, 1, &msg_type);
+    // Опция Subnet Mask = 255.255.255.0
+    uint32_t mask = htonl(0xFFFFFF00);
+    add_dhcp_option(opt, &idx, 1, 4, (uint8_t*)&mask);
+    // Опция Router = сервер
+    add_dhcp_option(opt, &idx, 3, 4, (uint8_t*)&server_ip);
+    // Опция Lease Time = 60 min
+    uint32_t lease = htonl(60);
+    add_dhcp_option(opt, &idx, 51, 4, (uint8_t*)&lease);
+    // Опция Server Identifier
+    add_dhcp_option(opt, &idx, 54, 4, (uint8_t*)&server_ip);
+    // End
+    opt[idx++] = 255;
+
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port   = htons(DHCP_CLIENT_PORT);
+    dest.sin_addr.s_addr = INADDR_BROADCAST;
+    sendto(sock, &offer, sizeof(offer), 0,
+        (struct sockaddr*)&dest, sizeof(dest));
+    printf("DHCPOFFER отправлен клиенту %02x:%02x:%02x:%02x:%02x:%02x -> %s\n",
+        req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
+        inet_ntoa(*(struct in_addr*)&offer.yiaddr));
 }
 
-// Добавление стандартных опций DHCP
-void add_dhcp_options(dhcp_message_t *msg) {
-    int i = 11;
-    // Маска подсети
-    msg->options[i] = 1;
-    msg->options[i + 1] = 4;
-    uint32_t subnet_mask = inet_addr("255.255.255.0");
-    memcpy(&msg->options[i + 2], &subnet_mask, 4);
-    i += 6;
-    // Маршрутизатор
-    msg->options[i] = 3;
-    msg->options[i + 1] = 4;
-    uint32_t router = inet_addr("192.168.1.1");
-    memcpy(&msg->options[i + 2], &router, 4);
-    i += 6;
-    // DNS-сервер
-    msg->options[i] = 6;
-    msg->options[i + 1] = 4;
-    uint32_t dns = inet_addr("8.8.8.8");
-    memcpy(&msg->options[i + 2], &dns, 4);
-    i += 6;
-    // Время аренды (24 часа)
-    msg->options[i] = 51;
-    msg->options[i + 1] = 4;
-    uint32_t lease_time = htonl(86400);
-    memcpy(&msg->options[i + 2], &lease_time, 4);
-    i += 6;
-    msg->options[i] = 255; // Конец опций
+// Обработчик DHCPREQUEST: формирует и отправляет DHCPACK
+void handle_request(int sock, struct dhcp_packet *req) {
+    uint32_t requested;
+    uint8_t *pdata;
+    uint8_t plen;
+    // Сначала пробуем опцию 'requested IP' (код 50)
+    if (get_dhcp_option(req->options, 50, &plen, &pdata) == 0) {
+        requested = *(uint32_t*)pdata;
+    } else if (req->ciaddr != 0) {
+        // Если клиент уже имеет IP (renewal), берем ciaddr
+        requested = req->ciaddr;
+    } else {
+        printf("DHCPREQUEST без запрошенного IP (нет опции 50 и ciaddr == 0)\n");
+        return;
+    }
+    // Проверяем, что запрос именно нашему серверу (опция 54)
+    if (get_dhcp_option(req->options, 54, &plen, &pdata) == 0) {
+        uint32_t sid = *(uint32_t*)pdata;
+        if (sid != server_ip) {
+            printf("DHCPREQUEST предназначен другому серверу %s\n", inet_ntoa(*(struct in_addr*)&sid));
+            return;
+        }
+    }
+    // Находим аренду по MAC и проверяем IP
+    int idx = find_lease(req->chaddr);
+    if (idx < 0 || leases[idx].ip != requested) {
+        printf("Запрошенный IP %s не совпадает с арендой для этого клиента\n", inet_ntoa(*(struct in_addr*)&requested));
+        return;
+    }
+    // Формируем ACK
+    struct dhcp_packet ack;
+    memset(&ack, 0, sizeof(ack));
+    ack.op = 2;
+    ack.htype = req->htype;
+    ack.hlen   = req->hlen;
+    ack.xid    = req->xid;
+    ack.yiaddr = requested;
+    ack.siaddr = server_ip;
+    memcpy(ack.chaddr, req->chaddr, 16);
+    // Опции
+    uint8_t *opt = ack.options;
+    opt[0]=99; opt[1]=130; opt[2]=83; opt[3]=99;
+    int oidx = 4;
+    uint8_t msg_type = 5; // DHCPACK
+    add_dhcp_option(opt, &oidx, 53, 1, &msg_type);
+    uint32_t mask = htonl(0xFFFFFF00);
+    add_dhcp_option(opt, &oidx, 1, 4, (uint8_t*)&mask);
+    add_dhcp_option(opt, &oidx, 3, 4, (uint8_t*)&server_ip);
+    uint32_t lease_time = htonl(60);
+    add_dhcp_option(opt, &oidx, 51, 4, (uint8_t*)&lease_time);
+    add_dhcp_option(opt, &oidx, 54, 4, (uint8_t*)&server_ip);
+    opt[oidx++] = 255;
+    
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port   = htons(DHCP_CLIENT_PORT);
+    dest.sin_addr.s_addr = INADDR_BROADCAST;
+    sendto(sock, &ack, sizeof(ack), 0,
+        (struct sockaddr*)&dest, sizeof(dest));
+    printf("DHCPACK отправлен клиенту %02x:%02x:%02x:%02x:%02x:%02x -> %s\n",
+        req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
+        inet_ntoa(*(struct in_addr*)&ack.yiaddr));
 }
 
 int main() {
-    int sockfd; // Сокет для обмена данными с клиентами
-    struct sockaddr_in server_addr, client_addr; // Структуры для адресов сервера и клиента
-    socklen_t client_len = sizeof(client_addr); // Размер структуры адреса клиента
-    dhcp_message_t msg; // Структура для приема и отправки DHCP сообщений
-    uint32_t server_ip = inet_addr("192.168.1.1"); // IP-адрес сервера. Возвращается в предложении DHCP.
+    // Получаем IP сервера через gethostbyname
+    char host[256];
+    // if (gethostname(host, sizeof(host)) < 0) perror("gethostname");
+    server_ip = inet_addr("192.168.1.1");
+    // struct hostent *he = gethostbyname(host);
+//  if (!he) {
+//      perror("gethostbyname");
+//      return 1;
+//  }
+    // memcpy(&server_ip, he->h_addr_list[0], 4);
+    printf("DHCP-сервер запущен на IP %s\n", inet_ntoa(*(struct in_addr*)&server_ip));
 
-    // Инициализация пула IP
-    init_ip_pool();
+    if (load_addr_list("address_list.txt") < 0) return 1;
+    printf("Загружено %d IP-адресов для аренды\n", addr_count);
 
-    // Создание сокета
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("Ошибка создания сокета");
-        exit(EXIT_FAILURE);
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        return 1;
+    }
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval));
+
+    struct sockaddr_in servaddr = {0};
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(DHCP_SERVER_PORT);
+    if (bind(sock, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
+        perror("bind");
+        return 1;
     }
 
-    // Включение широковещательных сообщений
-    int broadcast = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0) {
-        perror("Ошибка настройки сокета");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    // Привязка к порту 67
-    memset(&server_addr, 0, sizeof(server_addr)); // Заполнение структуры нулями
-    server_addr.sin_family = AF_INET; // IPv4
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Прослушивание на всех доступных интерфейсах
-    server_addr.sin_port = htons(67); // Порт сервера (67)
-
-    // Привязка сокета
-    if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Ошибка привязки сокета к порту");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("DHCP сервер запущен. Ожидание запросов на порту %d\n", 67);
-
-    // Основной цикл обработки сообщений
     while (1) {
-        // Прием DHCPDISCOVER
-        init_dhcp_message(&msg);
-        int n = recvfrom(sockfd, &msg, sizeof(dhcp_message_t), 0,
-                         (struct sockaddr *)&client_addr, &client_len);
+        struct dhcp_packet buf;
+        struct sockaddr_in cliaddr;
+        socklen_t len = sizeof(cliaddr);
+        ssize_t n = recvfrom(sock, &buf, sizeof(buf), 0,
+                            (struct sockaddr*)&cliaddr, &len);
         if (n < 0) {
-            perror("Ошибка приема данных");
+            perror("recvfrom");
             continue;
         }
-
-        uint8_t msg_type = get_message_type(&msg);
-        printf("Получен тип сообщения: %d\n", msg_type);
-
-        switch (msg_type) {
-            case DHCPDISCOVER: {
-                uint32_t offered_ip = get_free_ip();
-                if (offered_ip == 0) {
-                    printf("Нет свободных IP-адресов\n");
-                    break;
-                }
-                init_dhcp_message(&msg);
-                msg.op = 2; // Тип сообщения: BOOTREPLY (2 - ответ от сервера к клиенту)
-                msg.xid = msg.xid; // Копирование ID транзакции из запроса
-                msg.yiaddr = offered_ip; // Новый IP-адрес клиента, предложенный сервером.
-                msg.siaddr = server_ip; // IP-адрес сервера. Возвращается в предложении DHCP.
-                memcpy(msg.chaddr, msg.chaddr, 16); // Копирование MAC-адреса клиента
-                set_message_type(&msg, DHCPOFFER); // Установка типа сообщения
-                set_server_identifier(&msg, server_ip); // Установка идентификатора сервера
-                add_dhcp_options(&msg);
-                client_addr.sin_port = htons(68);
-                sendto(sockfd, &msg, sizeof(dhcp_message_t), 0,
-                       (struct sockaddr *)&client_addr, client_len);
-                printf("Отправлен DHCPOFFER для IP: %s\n", inet_ntoa(*(struct in_addr *)&offered_ip));
-                break;
-            }
-            case DHCPREQUEST: {
-                uint32_t requested_ip = msg.yiaddr; // Упрощение: берем из yiaddr
-                if (is_ip_available(requested_ip)) {
-                    init_dhcp_message(&msg);
-                    msg.op = 2; // Тип сообщения: BOOTREPLY (2 - ответ от сервера к клиенту)
-                    msg.xid = msg.xid; // Копирование ID транзакции из запроса
-                    msg.yiaddr = requested_ip; // IP-адрес клиента, предложенный сервером.
-                    msg.siaddr = server_ip; // IP-адрес сервера. Возвращается в предложении DHCP.
-                    memcpy(msg.chaddr, msg.chaddr, 16); // Копирование MAC-адреса клиента
-                    set_message_type(&msg, DHCPACK); // Установка типа сообщения
-                    set_server_identifier(&msg, server_ip); // Установка идентификатора сервера
-                    add_dhcp_options(&msg);
-                    assign_ip(requested_ip, msg.chaddr);
-                    client_addr.sin_port = htons(68); // Порт клиента (68)
-                    sendto(sockfd, &msg, sizeof(dhcp_message_t), 0,
-                           (struct sockaddr *)&client_addr, client_len);
-                    printf("Отправлен DHCPACK для IP: %s\n", inet_ntoa(*(struct in_addr *)&requested_ip));
-                } else {
-                    init_dhcp_message(&msg);
-                    msg.op = 2;
-                    msg.xid = msg.xid;
-                    memcpy(msg.chaddr, msg.chaddr, 16);
-                    set_message_type(&msg, DHCPNAK);
-                    set_server_identifier(&msg, server_ip);
-                    client_addr.sin_port = htons(68);
-                    sendto(sockfd, &msg, sizeof(dhcp_message_t), 0,
-                           (struct sockaddr *)&client_addr, client_len);
-                    printf("Отправлен DHCPNAK для IP: %s\n", inet_ntoa(*(struct in_addr *)&requested_ip));
-                }
-                break;
-            }
-            case DHCPDECLINE: {
-                uint32_t declined_ip = msg.yiaddr; // Упрощение: из yiaddr
-                uint8_t dummy_chaddr[16] = {0};
-                assign_ip(declined_ip, dummy_chaddr);
-                printf("IP %s отмечен как отклоненный\n", inet_ntoa(*(struct in_addr *)&declined_ip));
-                break;
-            }
-            case DHCPRELEASE: {
-                uint32_t released_ip = msg.ciaddr;
-                release_ip(released_ip);
-                printf("IP %s освобожден\n", inet_ntoa(*(struct in_addr *)&released_ip));
-                break;
-            }
-            case DHCPINFORM: {
-                init_dhcp_message(&msg);
-                msg.op = 2;
-                msg.xid = msg.xid;
-                msg.yiaddr = 0; // Без выделения IP
-                msg.siaddr = server_ip;
-                memcpy(msg.chaddr, msg.chaddr, 16);
-                set_message_type(&msg, DHCPACK);
-                set_server_identifier(&msg, server_ip);
-                add_dhcp_options(&msg);
-                client_addr.sin_port = htons(68);
-                sendto(sockfd, &msg, sizeof(dhcp_message_t), 0,
-                       (struct sockaddr *)&client_addr, client_len);
-                printf("Отправлен DHCPACK для DHCPINFORM\n");
-                break;
-            }
-            default:
-                printf("Неподдерживаемый тип сообщения: %d\n", msg_type);
-                break;
+        uint8_t *data;
+        uint8_t dlen;
+        if (get_dhcp_option(buf.options, 53, &dlen, &data) < 0) continue;
+        uint8_t msg_type = data[0];
+        if (msg_type == 1) { // DHCPDISCOVER
+            handle_discover(sock, &buf);
+        } else if (msg_type == 3) { // DHCPREQUEST
+            handle_request(sock, &buf);
         }
     }
 
-    close(sockfd);
+    close(sock);
     return 0;
 }
