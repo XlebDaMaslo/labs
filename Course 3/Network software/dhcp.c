@@ -66,6 +66,17 @@ int load_addr_list(const char *filename) {
     return 0;
 }
 
+// Проверка конфликта IP-адреса: отправляет один ICMP-пакет и проверяет ответ
+int is_ip_conflicted(uint32_t ip) {
+    char ipstr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &ip, ipstr, sizeof(ipstr));
+    char cmd[128];
+    // ping одной попыткой с таймаутом в 1 секунду
+    snprintf(cmd, sizeof(cmd), "ping -c 1 -W 1 %s > /dev/null 2>&1", ipstr);
+    int ret = system(cmd);
+    return (ret == 0);  // 0: получен ответ, значит IP занят
+}
+
 // Поиск уже существующей аренды по MAC-адресу
 int find_lease(uint8_t *mac) {
     for (int i = 0; i < addr_count; i++) {
@@ -82,16 +93,20 @@ int allocate_ip(uint8_t *mac) {
     if (idx >= 0) {
         return idx;  // Уже было выделено
     }
-    // Найти свободный адрес
+    // Найти свободный адрес без конфликта на сети
     for (int i = 0; i < addr_count; i++) {
         if (!leases[i].used) {
+            if (is_ip_conflicted(addr_list[i])) {
+                printf("IP %s конфликтует на сети, пропускаем\n", inet_ntoa(*(struct in_addr*)&addr_list[i]));
+                continue;
+            }
             leases[i].used = 1;
             memcpy(leases[i].mac, mac, 16);
             leases[i].ip = addr_list[i];
             return i;
         }
     }
-    return -1; // Нет свободных адресов
+    return -1; // Нет доступных адресов
 }
 
 // Получить опцию DHCP из пакета
@@ -160,10 +175,10 @@ void handle_discover(int sock, struct dhcp_packet *req) {
     dest.sin_port   = htons(DHCP_CLIENT_PORT);
     dest.sin_addr.s_addr = INADDR_BROADCAST;
     sendto(sock, &offer, sizeof(offer), 0,
-        (struct sockaddr*)&dest, sizeof(dest));
+           (struct sockaddr*)&dest, sizeof(dest));
     printf("DHCPOFFER отправлен клиенту %02x:%02x:%02x:%02x:%02x:%02x -> %s\n",
-        req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
-        inet_ntoa(*(struct in_addr*)&offer.yiaddr));
+           req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
+           inet_ntoa(*(struct in_addr*)&offer.yiaddr));
 }
 
 // Обработчик DHCPREQUEST: формирует и отправляет DHCPACK
@@ -181,7 +196,6 @@ void handle_request(int sock, struct dhcp_packet *req) {
         printf("DHCPREQUEST без запрошенного IP (нет опции 50 и ciaddr == 0)\n");
         return;
     }
-    // Проверяем, что запрос именно нашему серверу (опция 54)
     if (get_dhcp_option(req->options, 54, &plen, &pdata) == 0) {
         uint32_t sid = *(uint32_t*)pdata;
         if (sid != server_ip) {
@@ -195,7 +209,7 @@ void handle_request(int sock, struct dhcp_packet *req) {
         printf("Запрошенный IP %s не совпадает с арендой для этого клиента\n", inet_ntoa(*(struct in_addr*)&requested));
         return;
     }
-    // Формируем ACK
+    // Формирование ACK
     struct dhcp_packet ack;
     memset(&ack, 0, sizeof(ack));
     ack.op = 2;
@@ -218,28 +232,28 @@ void handle_request(int sock, struct dhcp_packet *req) {
     add_dhcp_option(opt, &oidx, 51, 4, (uint8_t*)&lease_time);
     add_dhcp_option(opt, &oidx, 54, 4, (uint8_t*)&server_ip);
     opt[oidx++] = 255;
-    
+
     struct sockaddr_in dest = {0};
     dest.sin_family = AF_INET;
     dest.sin_port   = htons(DHCP_CLIENT_PORT);
     dest.sin_addr.s_addr = INADDR_BROADCAST;
     sendto(sock, &ack, sizeof(ack), 0,
-        (struct sockaddr*)&dest, sizeof(dest));
+           (struct sockaddr*)&dest, sizeof(dest));
     printf("DHCPACK отправлен клиенту %02x:%02x:%02x:%02x:%02x:%02x -> %s\n",
-        req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
-        inet_ntoa(*(struct in_addr*)&ack.yiaddr));
+           req->chaddr[0],req->chaddr[1],req->chaddr[2],req->chaddr[3],req->chaddr[4],req->chaddr[5],
+           inet_ntoa(*(struct in_addr*)&ack.yiaddr));
 }
 
 int main() {
     // Получаем IP сервера через gethostbyname
-    char host[256];
+    // char host[256];
     // if (gethostname(host, sizeof(host)) < 0) perror("gethostname");
     server_ip = inet_addr("192.168.1.1");
     // struct hostent *he = gethostbyname(host);
-//  if (!he) {
-//      perror("gethostbyname");
-//      return 1;
-//  }
+    //  if (!he) {
+    //      perror("gethostbyname");
+    //      return 1;
+    //  }
     // memcpy(&server_ip, he->h_addr_list[0], 4);
     printf("DHCP-сервер запущен на IP %s\n", inet_ntoa(*(struct in_addr*)&server_ip));
 
@@ -267,13 +281,11 @@ int main() {
         struct dhcp_packet buf;
         struct sockaddr_in cliaddr;
         socklen_t len = sizeof(cliaddr);
-        ssize_t n = recvfrom(sock, &buf, sizeof(buf), 0,
-                            (struct sockaddr*)&cliaddr, &len);
-        if (n < 0) {
+        if (recvfrom(sock, &buf, sizeof(buf), 0, (struct sockaddr*)&cliaddr, &len) < 0) {
             perror("recvfrom");
             continue;
         }
-        uint8_t *data;
+        uint8_t *data; 
         uint8_t dlen;
         if (get_dhcp_option(buf.options, 53, &dlen, &data) < 0) continue;
         uint8_t msg_type = data[0];
@@ -283,7 +295,6 @@ int main() {
             handle_request(sock, &buf);
         }
     }
-
     close(sock);
     return 0;
 }
