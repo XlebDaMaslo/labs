@@ -2,152 +2,91 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import erfc
 
-# ============================
+def Q(x):
+    return 0.5 * erfc(x / np.sqrt(2))
+
 # Параметры моделирования
-# ============================
-N = 10**5             # количество бит (символов)
-Fs = 1000             # частота дискретизации (отсчетов в секунду)
-T_sym = 0.01          # длительность символа, сек
-t_sym = np.linspace(0, T_sym, int(Fs * T_sym), endpoint=False)   # вектор отсчетов для одного символа
+N_bits = 10000         # число переданных символов
+fs = 1000              # частота дискретизации (Гц)
+L = 100                # число отсчетов на символ
+t = np.arange(L) / fs  # вектор времени для одного символа
+Ts = 1 / fs            # длительность отсчета (с)
 
-# Параметры несущей
-fc = 200              # базовая несущая для BASK (Гц)
+# Параметры несущих
+fc = 100               # частота для AM (Гц)
+f1 = 120               # частота для FM при бит=1 (Гц)
+f0 = 80                # частота для FM при бит=0 (Гц)
 
-# --- Параметры для BASK (амплитудная модуляция) ---
-A0 = 1.0              # амплитуда для бита 0
-A1 = 2.0              # амплитуда для бита 1
+cs_am1 = np.cos(2 * np.pi * fc * t)
+cs_am0 = -cs_am1
+cs_fm1 = np.cos(2 * np.pi * f1 * t)
+cs_fm0 = np.cos(2 * np.pi * f0 * t)
 
-# --- Параметры для BFSK (частотная модуляция) ---
-fc0 = 200             # несущая для бита 0 (Гц)
-fc1 = 240             # несущая для бита 1 (Гц)
-A_fm = 1.0            # одинаковая амплитуда для BFSK
+# Диапазон SNR
+SNR_dB = np.arange(0, 16)
+gamma_lin = 10 ** (SNR_dB / 10)
 
-# Диапазон SNR в dB (от 0 до 15 дБ)
-SNR_dB_range = np.arange(0, 16, 2)
+# Теоретические BER
+BER_th_am = Q(np.sqrt(2 * gamma_lin))
+BER_th_fm = Q(np.sqrt(gamma_lin))
 
-# ============================
-# Генерация последовательности битов
-# ============================
-bits = np.random.randint(0, 2, N)
+# Генерация случайных бит
+bits = np.random.randint(0, 2, size=N_bits)
 
-# ============================
-# Функции формирования сигналов
-# ============================
-def modulate_BASK(bits, t_sym, A0, A1, fc):
-    """ Формирование сигнала BASK (амплитудная модуляция)
-        Для каждого бита генерируется отрезок сигнала A*cos(2π·fc·t),
-        где амплитуда A зависит от бита.
-    """
-    Ns = len(t_sym)
-    signal = np.zeros(N * Ns)
-    # Сохранить шаблоны (без шума) для корреляционного приемника
-    template = np.cos(2 * np.pi * fc * t_sym)
-    energy_template = np.sum(template**2)
-    for i, b in enumerate(bits):
-        A = A1 if b == 1 else A0
-        signal[i*Ns:(i+1)*Ns] = A * template
-    return signal, template, energy_template
+# Средняя мощность и энергия символа
+P_am = np.mean(cs_am1 ** 2)
+E_am = P_am * (L / fs)
+P_fm = np.mean(cs_fm1 ** 2)
+E_fm = P_fm * (L / fs)
 
-def modulate_BFSK(bits, t_sym, fc0, fc1, A):
-    """ Формирование сигнала BFSK (частотная модуляция)
-        Для каждого бита генерируется отрезок сигнала cos(2π·f·t),
-        где f = fc0 для 0 и f = fc1 для 1.
-    """
-    Ns = len(t_sym)
-    signal = np.zeros(N * Ns)
-    # Запомним шаблоны для обоих сигналов
-    template0 = np.cos(2 * np.pi * fc0 * t_sym)
-    template1 = np.cos(2 * np.pi * fc1 * t_sym)
-    energy_template0 = np.sum(template0**2)
-    energy_template1 = np.sum(template1**2)
-    for i, b in enumerate(bits):
-        f = fc1 if b == 1 else fc0
-        signal[i*Ns:(i+1)*Ns] = A * np.cos(2 * np.pi * f * t_sym)
-    return signal, template0, template1, energy_template0, energy_template1
+BER_sim_am = np.zeros_like(gamma_lin)
+BER_sim_fm = np.zeros_like(gamma_lin)
 
-# Модуляция
-signal_BASK, template_am, E_t_am = modulate_BASK(bits, t_sym, A0, A1, fc)
-signal_BFSK, template0_fm, template1_fm, E_t_fm0, E_t_fm1 = modulate_BFSK(bits, t_sym, fc0, fc1, A_fm)
+for idx, gamma in enumerate(gamma_lin):
+    # Расчёт спектральной плотности и дисперсии шума
+    N0_am = E_am / gamma
+    N0_fm = E_fm / gamma
+    sigma_am = np.sqrt(N0_am * fs / 2)
+    sigma_fm = np.sqrt(N0_fm * fs / 2)
 
-# Определяем количество отсчетов на символ
-Ns = len(t_sym)
+    s_am = cs_am1 * bits[:, None] + cs_am0 * (1 - bits)[:, None]
+    s_fm = cs_fm1 * bits[:, None] + cs_fm0 * (1 - bits)[:, None]
 
-# Функция для добавления шума с требуемым SNR
-def add_AWGN(signal, SNR_dB):
-    """ Добавление аддитивного белого гауссовского шума к сигналу.
-        SNR_dB – отношение сигнал/шум в дБ.
-        Мощность сигнала вычисляется по усреднению квадратов.
-    """
-    sig_power = np.mean(signal**2)
-    SNR_linear = 10**(SNR_dB/10)
-    noise_power = sig_power / SNR_linear
-    noise = np.sqrt(noise_power) * np.random.randn(len(signal))
-    return signal + noise
+    noise_am = np.random.normal(0, sigma_am, size=s_am.shape)
+    noise_fm = np.random.normal(0, sigma_fm, size=s_fm.shape)
+    cs_am_n = s_am + noise_am
+    cs_fm_n = s_fm + noise_fm
 
-# ============================
-# Моделирование приёмников и подсчет ошибок
-# ============================
-BER_sim_BASK = []
-BER_sim_BFSK = []
+    # Корреляционный приём
+    sr_am1 = Ts * np.sum(cs_am_n * cs_am1, axis=1)
+    sr_am0 = Ts * np.sum(cs_am_n * cs_am0, axis=1)
+    sr_am = sr_am1 - sr_am0
 
-# Для корреляционного приемника BASK: используем шаблон cos(2π·fc·t)
-# Оптимальный порог (при известной энергии) равен половине суммы корреляционных результатов 
-# для сигналов с амплитудами A0 и A1. Если E = energy(template), то
-# decision threshold = (A0*E + A1*E)/2 = (A0+A1)*E/2.
-threshold_am = (A0 + A1) * E_t_am / 2
+    sr_fm1 = Ts * np.sum(cs_fm_n * cs_fm1, axis=1)
+    sr_fm0 = Ts * np.sum(cs_fm_n * cs_fm0, axis=1)
+    sr_fm = sr_fm1 - sr_fm0
 
-for snr_db in SNR_dB_range:
-    # Для BASK
-    rx_BASK = add_AWGN(signal_BASK, snr_db)
-    decisions_am = np.zeros(N, dtype=int)
-    errors_am = 0
-    for i in range(N):
-        segment = rx_BASK[i*Ns:(i+1)*Ns]
-        # Корреляционный интеграл
-        corr = np.sum(segment * template_am)
-        # Решающее правило: если интеграл больше порога, решаем 1, иначе 0
-        decided_bit = 1 if corr > threshold_am else 0
-        if decided_bit != bits[i]:
-            errors_am += 1
+    decisions_am = (sr_am > 0).astype(int)
+    decisions_fm = (sr_fm > 0).astype(int)
 
-    BER_sim_BASK.append(errors_am/N)
+    # Подсчёт ошибок
+    BER_sim_am[idx] = np.mean(decisions_am != bits)
+    BER_sim_fm[idx] = np.mean(decisions_fm != bits)
 
-    # Для BFSK – корреляционный приемник с двумя фильтрами
-    rx_BFSK = add_AWGN(signal_BFSK, snr_db)
-    errors_fm = 0
-    for i in range(N):
-        segment = rx_BFSK[i*Ns:(i+1)*Ns]
-        # Корреляционные интегралы с двумя шаблонами
-        corr0 = np.sum(segment * template0_fm)
-        corr1 = np.sum(segment * template1_fm)
-        decided_bit = 1 if corr1 > corr0 else 0
-        if decided_bit != bits[i]:
-            errors_fm += 1
+# Вывод симулированных BER
+print("Симулированная BER AM:", BER_sim_am)
+print("Симулированная BER FM:", BER_sim_fm)
 
-    BER_sim_BFSK.append(errors_fm/N)
-
-# ============================
-# Теоретические кривые вероятности ошибки
-# ============================
-# Для вычислений воспользуемся определенными формулами:
-# AM: BER = Q(sqrt(2*gamma)) = 0.5*erfc(sqrt(2*gamma)/sqrt2) = 0.5*erfc(sqrt(gamma))
-# BFSK: BER = Q(sqrt(gamma)) = 0.5*erfc( sqrt(gamma)/sqrt2 )
-gamma_lin = 10**(SNR_dB_range/10)   # предполагаем, что gamma = Es/N0, а Es определяется мощностью сигнала
-theory_BER_AM = 0.5 * erfc(np.sqrt(gamma_lin))
-theory_BER_FM = 0.5 * erfc(np.sqrt(gamma_lin)/np.sqrt(2))
-
-# ============================
-# Построение графиков
-# ============================
+# Построение графика зависимости BER от SNR
 plt.figure(figsize=(8, 6))
-plt.semilogy(SNR_dB_range, theory_BER_AM, 'b.-', label='Теоретическая BER BASK')
-plt.semilogy(SNR_dB_range, BER_sim_BASK, 'mx-', label='Моделирование BASK')
-plt.semilogy(SNR_dB_range, theory_BER_FM, 'g.-', label='Теоретическая BER BFSK')
-plt.semilogy(SNR_dB_range, BER_sim_BFSK, 'ko-', label='Моделирование BFSK')
-plt.xlabel('Отношение сигнал/шум, dB')
+plt.semilogy(SNR_dB, BER_sim_am, 'o', label='AM (моделирование)')
+plt.semilogy(SNR_dB, BER_sim_fm, 's', label='FM (моделирование)')
+plt.semilogy(SNR_dB, BER_th_am, '-', label='AM (теория)')
+plt.semilogy(SNR_dB, BER_th_fm, '--', label='FM (теория)')
+plt.xlabel('Отношение сигнал/шум (дБ)')
 plt.ylabel('Вероятность ошибки')
-plt.title('Зависимость вероятности ошибки от SNR для BASK и BFSK')
-plt.grid(True, which='both')
+plt.title('BER AM и FM корреляционного приёма')
+plt.grid(True, which='both', linestyle='--', linewidth=0.5)
 plt.legend()
-plt.ylim(1e-5, 1)
+plt.tight_layout()
 plt.show()
