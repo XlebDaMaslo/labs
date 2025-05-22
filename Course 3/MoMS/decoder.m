@@ -1,19 +1,19 @@
 function text = decoder(bits)
     chars = [char('A':'Z'), char('a':'z'), char('0':'9'), ' ', '.', '!', '?'];
-    n = length(bits);
-    n_groups = floor(n / 7);
-    bits = bits(1 : 7*n_groups);
-    if isempty(bits)
-        text = '';
-        return;
+    error_char = '*';
+    
+    bits = bits(:)'; 
+    if mod(length(bits), 7) ~= 0
+        bits = bits(1:end - mod(length(bits), 7));
     end
-    bitMatrix = reshape(bits, 7, [])';
-    text = [];
-    for i = 1:n_groups
-        binVec = bitMatrix(i, :);
-        binStr = char('0' + binVec);
-        idx = bin2dec(binStr);
-        text(i) = chars(idx + 1);
+    
+    bit_groups = reshape(bits, 7, [])';
+    
+    text = repmat(error_char, 1, size(bit_groups, 1));
+    for i = 1:size(bit_groups, 1)
+        idx = bin2dec( sprintf('%d', bit_groups(i, :)) );
+        if idx <= length(chars) - 1
+            text(i) = chars(idx + 1);
+        end
     end
-    text = char(text);
 end

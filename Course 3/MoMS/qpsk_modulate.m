@@ -1,6 +1,6 @@
 function symbols = qpsk_modulate(bits)
     if mod(length(bits), 2) ~= 0
-        bits = [bits, 0]; % Нулевой бит, если количество нечетное
+        bits = [bits, 0];
     end
     
     symbols = zeros(1, length(bits)/2);
