@@ -3,7 +3,7 @@ clear all; clc; close all;
 text_length = 35;         
 NB = 7;                  
 TCP_ratio = 1/16;         
-delta_rs = 6;             
+delta_rs = 10;             
 B = 13e6;                 
 f0 = 1.9e9;               
 
